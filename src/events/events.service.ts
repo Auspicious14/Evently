@@ -26,6 +26,7 @@ export class EventsService {
 
   async findAll(filterEventDto: Partial<FilterEventDto>): Promise<Event[]> {
     const {
+      title,
       location,
       category,
       dateFrom,
@@ -36,6 +37,10 @@ export class EventsService {
       postedToX,
     } = filterEventDto;
     const query = this.eventModel.find();
+
+    if (title) {
+      query.where('title').equals(new RegExp(title, 'i'));
+    }
 
     if (location) {
       query.where('location').equals(new RegExp(location, 'i'));
