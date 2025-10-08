@@ -1,0 +1,3 @@
+
+> tech-events-api@0.0.1 start:prod
+> node dist/main
