@@ -17,7 +17,7 @@ export class CreateEventDto {
   @IsNotEmpty()
   location: string;
 
-  @IsEnum(['AI', 'Fintech', 'Startup', 'Coding'])
+  @IsEnum(['AI', 'Fintech', 'Startup', 'Coding', 'Hardware', 'Design', 'Marketing', 'Cybersecurity', 'Virtual'])
   @IsNotEmpty()
   category: string;
 
