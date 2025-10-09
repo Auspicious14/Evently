@@ -8,6 +8,8 @@ import { EventsModule } from './events/events.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { XIntegrationModule } from './x-integration/x-integration.module';
+import { LinksModule } from './links/links.module';
+import { AccessRequestsModule } from './access-requests/access-requests.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { XIntegrationModule } from './x-integration/x-integration.module';
     UsersModule,
     AuthModule,
     XIntegrationModule,
+    LinksModule,
+    AccessRequestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
