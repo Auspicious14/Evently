@@ -30,4 +30,6 @@ import { XIntegrationModule } from './x-integration/x-integration.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule {
+  constructor(private configService: ConfigService) {}
+}

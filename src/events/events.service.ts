@@ -24,7 +24,9 @@ export class EventsService {
     return createdEvent.save();
   }
 
-  async findAll(filterEventDto: Partial<FilterEventDto>): Promise<Event[]> {
+  async findAll(
+    filterEventDto: Partial<FilterEventDto>,
+  ): Promise<{ success: boolean; data: Event[] }> {
     const {
       title,
       location,
@@ -66,19 +68,19 @@ export class EventsService {
     }
 
     query.skip((skip as number) || 0).limit((limit as number) || 10);
-
-    return query.exec();
+    const events = await query.exec();
+    return { success: true, data: events };
   }
 
-  async findOne(id: string): Promise<Event> {
+  async findOne(id: string): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findById(id).exec();
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
-    return event;
+    return { success: true, data: event };
   }
 
-  async upvote(id: string): Promise<Event> {
+  async upvote(id: string): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findByIdAndUpdate(
       id,
       { $inc: { upvotes: 1 } },
@@ -87,10 +89,10 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
-    return event;
+    return { success: true, data: event };
   }
 
-  async flag(id: string): Promise<Event> {
+  async flag(id: string): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findByIdAndUpdate(
       id,
       { $inc: { flags: 1 } },
@@ -99,10 +101,13 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
-    return event;
+    return { success: true, data: event };
   }
 
-  async updateStatus(id: string, status: string): Promise<Event> {
+  async updateStatus(
+    id: string,
+    status: string,
+  ): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findByIdAndUpdate(
       id,
       { status },
@@ -111,10 +116,10 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
-    return event;
+    return { success: true, data: event };
   }
 
-  async markAsPostedToX(id: string): Promise<Event> {
+  async markAsPostedToX(id: string): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findByIdAndUpdate(
       id,
       { postedToX: true },
@@ -123,6 +128,6 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
-    return event;
+    return { success: true, data: event };
   }
 }
