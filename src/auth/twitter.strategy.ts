@@ -97,8 +97,6 @@ export class TwitterStrategy extends PassportStrategy(Strategy, 'twitter') {
         tokenSecret,
       );
 
-      console.log('User after validation', user);
-
       done(null, user);
     } catch (err) {
       done(err, false);
