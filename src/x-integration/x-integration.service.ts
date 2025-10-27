@@ -75,10 +75,8 @@ export class XIntegrationService {
   async postApprovedEvents() {
     this.logger.log('Posting approved events to X...');
     try {
-      const events: any = await this.eventsService.findAll({
-        status: 'approved',
-        postedToX: false,
-      });
+      // Use the new helper method
+      const events = await this.eventsService.getEventsToPost();
 
       let postedCount = 0;
 
@@ -173,11 +171,13 @@ export class XIntegrationService {
         description: tweet.text,
         date: date.toISOString(),
         location: location || 'Online',
-        category: category || 'General',
+        category: category || 'Startup',
         link,
         isFree,
-        sourceType: 'twitter',
+        sourceType: 'x',
         sourceTweetId: tweet.id,
+        status: 'pending', // Default to pending for admin approval
+        postedToX: false,
       };
     } catch (error) {
       this.logger.warn(`Failed to parse tweet:`, error);
@@ -233,10 +233,14 @@ export class XIntegrationService {
   private determineCategory(text: string): string {
     const categoryKeywords = {
       'AI': ['ai', 'artificial intelligence', 'machine learning', 'ml', 'deep learning'],
-      'Web3': ['web3', 'blockchain', 'crypto', 'nft', 'defi'],
-      'Tech': ['tech', 'software', 'developer', 'coding', 'programming'],
-      'Business': ['business', 'startup', 'entrepreneur', 'networking'],
-      'Design': ['design', 'ui', 'ux', 'creative'],
+      'Fintech': ['fintech', 'financial', 'banking', 'payment', 'blockchain', 'crypto'],
+      'Startup': ['startup', 'entrepreneur', 'founder', 'business', 'pitch'],
+      'Coding': ['coding', 'programming', 'developer', 'software', 'hackathon'],
+      'Hardware': ['hardware', 'iot', 'robotics', 'electronics', 'embedded'],
+      'Design': ['design', 'ui', 'ux', 'creative', 'figma'],
+      'Marketing': ['marketing', 'growth', 'sales', 'branding', 'seo'],
+      'Cybersecurity': ['cybersecurity', 'security', 'infosec', 'hacking', 'privacy'],
+      'Virtual': ['virtual', 'online', 'remote', 'webinar', 'zoom'],
     };
 
     const lowerText = text.toLowerCase();
@@ -247,7 +251,7 @@ export class XIntegrationService {
       }
     }
 
-    return 'General';
+    return 'Startup'; // Default fallback
   }
 
   private checkIfFree(text: string): boolean {
@@ -269,4 +273,4 @@ export class XIntegrationService {
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
-        }
+}
