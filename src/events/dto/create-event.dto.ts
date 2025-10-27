@@ -7,7 +7,7 @@ export class CreateEventDto {
 
   @IsString()
   @IsOptional()
-  description: string;
+  description?: string;
 
   @IsDateString()
   @IsNotEmpty()
@@ -23,9 +23,26 @@ export class CreateEventDto {
 
   @IsBoolean()
   @IsOptional()
-  isFree: boolean;
+  isFree?: boolean;
 
   @IsUrl()
   @IsOptional()
-  link: string;
+  link?: string;
+
+  // Optional fields for Twitter integration
+  @IsString()
+  @IsOptional()
+  sourceType?: string; // 'manual' or 'x'
+
+  @IsString()
+  @IsOptional()
+  sourceTweetId?: string;
+
+  @IsEnum(['pending', 'approved', 'rejected'])
+  @IsOptional()
+  status?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  postedToX?: boolean;
 }
