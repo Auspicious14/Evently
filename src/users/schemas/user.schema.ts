@@ -5,8 +5,8 @@ export type UserDocument = User & Document;
 
 @Schema({ timestamps: true })
 export class User {
-  @Prop()
-  xId: string;
+  @Prop({ unique: true, sparse: true })
+  xId?: string;
 
   @Prop({ unique: true, sparse: true })
   email: string;

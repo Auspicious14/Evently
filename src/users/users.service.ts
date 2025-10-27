@@ -33,43 +33,25 @@ export class UsersService {
     }
   }
 
-  async findOne(username: string): Promise<User | undefined> {
-    const user = await this.userModel
+  async findOne(username: string): Promise<User | null> {
+    return await this.userModel
       .findOne({ username })
       .select('+password')
       .exec();
-    if (!user) {
-      throw new BadRequestException('User not found.');
-    }
-    return user;
   }
 
-  async findById(id: string): Promise<User | undefined> {
-    const user = await this.userModel.findById(id).exec();
-    if (!user) {
-      throw new BadRequestException('User not found.');
-    }
-    return user;
+  async findById(id: string): Promise<User | null> {
+    return await this.userModel.findById(id).exec();
   }
 
-  async findByXId(xId: string): Promise<User | undefined> {
+  async findByXId(xId: string): Promise<User | null> {
     const user = await this.userModel.findOne({ xId }).exec();
-    if (!user) {
-      throw new BadRequestException('User not found.');
-    }
     return user;
   }
 
-  async findByIdAndUpdate(
-    id: string,
-    userPayload: User,
-  ): Promise<User | undefined> {
-    const user = await this.userModel
+  async findByIdAndUpdate(id: string, userPayload: User): Promise<User | null> {
+    return await this.userModel
       .findByIdAndUpdate(id, userPayload, { new: true })
       .exec();
-    if (!user) {
-      throw new BadRequestException('User not found.');
-    }
-    return user;
   }
 }

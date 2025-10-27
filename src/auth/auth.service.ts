@@ -100,8 +100,9 @@ export class AuthService {
         accessToken,
         refreshToken,
       };
-
+      console.log('Creating user with data: ', userData);
       user = await this.usersService.create(userData);
+      console.log('User created:', user);
     } else {
       // Update existing user's tokens
       user.accessToken = accessToken;

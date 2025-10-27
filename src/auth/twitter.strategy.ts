@@ -81,7 +81,7 @@ export class TwitterStrategy extends PassportStrategy(Strategy, 'twitter') {
   ): Promise<any> {
     try {
       const { id, username, displayName, emails, photos } = profile;
-
+      console.log('Twitter Profile', JSON.stringify(profile, null, 2));
       const userProfile = {
         provider: 'twitter',
         id: id,
@@ -90,12 +90,14 @@ export class TwitterStrategy extends PassportStrategy(Strategy, 'twitter') {
         email: emails && emails.length > 0 ? emails[0].value : null,
         profileImageUrl: photos && photos.length > 0 ? photos[0].value : null,
       };
-
+      console.log({ userProfile });
       const user = await this.authService.validateOAuthLogin(
         userProfile,
         token,
         tokenSecret,
       );
+
+      console.log('User after validation', user);
 
       done(null, user);
     } catch (err) {
