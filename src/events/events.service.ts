@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Event, EventDocument } from './schemas/event.schema';
@@ -14,14 +14,28 @@ export class EventsService {
   async create(
     createEventDto: CreateEventDto,
     userId?: string,
-  ): Promise<Event> {
+  ): Promise<{ success: boolean, data: Event }> {
+    // Check for duplicate tweet if from Twitter
+    if (createEventDto.sourceTweetId) {
+      const existing = await this.eventModel.findOne({ 
+        sourceTweetId: createEventDto.sourceTweetId 
+      });
+      if (existing) {
+        throw new BadRequestException('Event from this tweet already exists');
+      }
+    }
+
     const eventData = {
       ...createEventDto,
       submitterId: userId ? new Types.ObjectId(userId) : undefined,
-      source: userId ? 'manual' : 'x',
+      source: createEventDto.sourceType || (userId ? 'manual' : 'x'),
+      status: createEventDto.status || 'pending',
     };
+
     const createdEvent = new this.eventModel(eventData);
-    return createdEvent.save();
+    const data = createdEvent.save();
+    return { success: true, data }
+
   }
 
   async findAll(
@@ -41,11 +55,11 @@ export class EventsService {
     const query = this.eventModel.find();
 
     if (title) {
-      query.where('title').equals(new RegExp(title, 'i'));
+      query.where('title').regex(new RegExp(title, 'i'));
     }
 
     if (location) {
-      query.where('location').equals(new RegExp(location, 'i'));
+      query.where('location').regex(new RegExp(location, 'i'));
     }
 
     if (category) {
@@ -56,7 +70,7 @@ export class EventsService {
       const dateQuery: any = {};
       if (dateFrom) dateQuery.$gte = new Date(dateFrom);
       if (dateTo) dateQuery.$lte = new Date(dateTo);
-      query.where('date', dateQuery);
+      query.where('date').gte(dateQuery.$gte).lte(dateQuery.$lte);
     }
 
     if (status) {
@@ -67,7 +81,11 @@ export class EventsService {
       query.where('postedToX').equals(postedToX);
     }
 
-    query.skip((skip as number) || 0).limit((limit as number) || 10);
+    query
+      .sort({ date: 1 }) // Sort by date ascending
+      .skip((skip as number) || 0)
+      .limit((limit as number) || 10);
+
     const events = await query.exec();
     return { success: true, data: events };
   }
@@ -122,12 +140,27 @@ export class EventsService {
   async markAsPostedToX(id: string): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findByIdAndUpdate(
       id,
-      { postedToX: true },
+      { 
+        postedToX: true,
+        postedToXAt: new Date(),
+      },
       { new: true },
     );
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
     return { success: true, data: event };
+  }
+
+  // Helper method for getting events to post to X
+  async getEventsToPost(): Promise<Event[]> {
+    return this.eventModel
+      .find({
+        status: 'approved',
+        postedToX: false,
+      })
+      .sort({ date: 1 })
+      .limit(10)
+      .exec();
   }
 }
