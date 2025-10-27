@@ -9,7 +9,7 @@ export class Event {
   title: string;
 
   @Prop()
-  description: string;
+  description?: string;
 
   @Prop({ required: true })
   date: Date;
@@ -17,23 +17,29 @@ export class Event {
   @Prop({ required: true })
   location: string;
 
-  @Prop({ type: { type: String, enum: ['Point'], default: 'Point' }, coordinates: { type: [Number], default: [0, 0] } })
-  coordinates: {
-    type: string;
-    coordinates: number[];
-  };
-
-  @Prop({ required: true, enum: ['AI', 'Fintech', 'Startup', 'Coding'] })
+  @Prop({ 
+    required: true,
+    enum: ['AI', 'Fintech', 'Startup', 'Coding', 'Hardware', 'Design', 'Marketing', 'Cybersecurity', 'Virtual']
+  })
   category: string;
 
-  @Prop({ default: true })
+  @Prop({ default: false })
   isFree: boolean;
 
   @Prop()
-  link: string;
+  link?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: false })
-  submitterId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  submitterId?: Types.ObjectId;
+
+  @Prop({ default: 'manual', enum: ['manual', 'x'] })
+  source: string;
+
+  @Prop()
+  sourceTweetId?: string;
+
+  @Prop({ default: 'pending', enum: ['pending', 'approved', 'rejected'] })
+  status: string;
 
   @Prop({ default: 0 })
   upvotes: number;
@@ -41,16 +47,17 @@ export class Event {
   @Prop({ default: 0 })
   flags: number;
 
-  @Prop({ required: true, enum: ['pending', 'approved', 'rejected'], default: 'pending' })
-  status: string;
-
-  @Prop({ default: 'manual' })
-  source: string;
-
   @Prop({ default: false })
   postedToX: boolean;
+
+  @Prop()
+  postedToXAt?: Date;
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);
 
-EventSchema.index({ coordinates: '2dsphere' });
+// Add indexes for better query performance
+EventSchema.index({ date: 1, status: 1 });
+EventSchema.index({ category: 1, status: 1 });
+EventSchema.index({ status: 1, postedToX: 1 });
+EventSchema.index({ sourceTweetId: 1 }, { unique: true, sparse: true });
