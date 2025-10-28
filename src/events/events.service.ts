@@ -14,7 +14,7 @@ export class EventsService {
   async create(
     createEventDto: CreateEventDto,
     userId?: string,
-  ): Promise<{ success: boolean, data: Event }> {
+  ): Promise<{ success: boolean, data: Partial<Event> }> {
     // Check for duplicate tweet if from Twitter
     if (createEventDto.sourceTweetId) {
       const existing = await this.eventModel.findOne({ 
@@ -33,7 +33,7 @@ export class EventsService {
     };
 
     const createdEvent = new this.eventModel(eventData);
-    const data = createdEvent.save();
+    const data: any = createdEvent.save();
     return { success: true, data }
 
   }

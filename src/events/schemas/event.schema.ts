@@ -5,6 +5,9 @@ export type EventDocument = Event & Document;
 
 @Schema({ timestamps: true })
 export class Event {
+  @Prop()
+  _id?: string;
+
   @Prop({ required: true })
   title: string;
 

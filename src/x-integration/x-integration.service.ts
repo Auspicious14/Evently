@@ -17,15 +17,15 @@ export class XIntegrationService {
   ) {
     // Initialize read-only client (for searching tweets)
     this.twitterClient = new TwitterApi(
-      this.configService.get<string>('TWITTER_BEARER_TOKEN'),
+      this.configService.get<string>('TWITTER_BEARER_TOKEN') as string,
     );
 
     // Initialize read-write client (for posting tweets)
     this.readWriteClient = new TwitterApi({
-      appKey: this.configService.get<string>('TWITTER_API_KEY'),
-      appSecret: this.configService.get<string>('TWITTER_API_SECRET'),
-      accessToken: this.configService.get<string>('TWITTER_ACCESS_TOKEN'),
-      accessSecret: this.configService.get<string>('TWITTER_ACCESS_SECRET'),
+      appKey: this.configService.get<string>('TWITTER_APP_KEY') as string,
+      appSecret: this.configService.get<string>('TWITTER_APP_SECRET') as string,
+      accessToken: this.configService.get<string>('TWITTER_ACCESS_TOKEN') as string,
+      accessSecret: this.configService.get<string>('TWITTER_ACCESS_SECRET') as string,
     });
   }
 
@@ -88,7 +88,7 @@ export class XIntegrationService {
           const tweet = await this.readWriteClient.v2.tweet(tweetText);
           
           // Mark as posted
-          await this.eventsService.markAsPostedToX(event._id);
+          await this.eventsService.markAsPostedToX(event._id as string);
           
           postedCount++;
           this.logger.log(`Posted event to X: ${event.title} (Tweet ID: ${tweet.data.id})`);
@@ -96,7 +96,7 @@ export class XIntegrationService {
           // Add delay to avoid rate limits (3 seconds between tweets)
           await this.delay(3000);
         } catch (error: any) {
-          this.logger.error(`Failed to post event ${event._id}:`, error.message);
+          this.logger.error(`Failed to post event ${event._id as string}:`, error.message);
         }
       }
 
