@@ -99,8 +99,7 @@ export class EventsService {
   }
 
   async getSimilar(
-  id: string,
-  category: string
+  id: string
 ): Promise<{ success: true; data: Event[] }> {
   
   const event = await this.eventModel.findById(id).lean();
