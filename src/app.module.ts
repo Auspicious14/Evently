@@ -8,6 +8,7 @@ import { EventsModule } from './events/events.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { XIntegrationModule } from './x-integration/x-integration.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { XIntegrationModule } from './x-integration/x-integration.module';
     UsersModule,
     AuthModule,
     XIntegrationModule,
+    CloudinaryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

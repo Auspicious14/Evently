@@ -9,8 +9,11 @@ import {
   UsePipes, 
   ValidationPipe, 
   UseGuards, 
-  Request 
+  Request,
+  UseInterceptors,
+  UploadedFiles
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventStatusDto } from './dto/update-event-status.dto';
@@ -25,10 +28,15 @@ export class EventsController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
+  @UseInterceptors(FilesInterceptor('images', 10))
   @UsePipes(new ValidationPipe({ transform: true }))
-  create(@Body() createEventDto: CreateEventDto, @Request() req) {
+  create(
+    @UploadedFiles() images: Express.Multer.File[],
+    @Body() createEventDto: CreateEventDto,
+    @Request() req,
+  ) {
     const userId = req.user.userId || req.user.sub;
-    return this.eventsService.create(createEventDto, userId);
+    return this.eventsService.create(createEventDto, userId, images);
   }
 
   @Get()
