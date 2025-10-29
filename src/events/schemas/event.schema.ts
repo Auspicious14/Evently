@@ -19,7 +19,7 @@ export class Event {
 
   @Prop({ 
     required: true,
-    enum: ['AI', 'Fintech', 'Startup', 'Coding', 'Hardware', 'Design', 'Marketing', 'Cybersecurity', 'Virtual']
+    enum: ['AI', 'Fintech', 'Startup', 'Coding', 'Hardware', 'Design', 'Marketing', 'Cybersecurity', 'Virtual', 'Physical']
   })
   category: string;
 
