@@ -38,6 +38,7 @@ export class EventsService {
       submitterId: userId ? new Types.ObjectId(userId) : undefined,
       source: createEventDto.sourceType || (userId ? 'manual' : 'x'),
       status: createEventDto.status || 'pending',
+      type: createEventDto.type || 'online'
     };
 
     const createdEvent = new this.eventModel(eventData);
