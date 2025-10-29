@@ -41,6 +41,9 @@ export class Event {
   @Prop({ default: 'pending', enum: ['pending', 'approved', 'rejected'] })
   status: string;
 
+  @Prop({ default: 'online', enum: ['online', 'in-person'] })
+  type: string;
+
   @Prop({ default: 0 })
   upvotes: number;
 
