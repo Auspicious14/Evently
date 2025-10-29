@@ -76,7 +76,7 @@ export class XIntegrationService {
     this.logger.log('Posting approved events to X...');
     try {
       // Use the new helper method
-      const events = await this.eventsService.getEventsToPost();
+      const events: any = await this.eventsService.getEventsToPost();
 
       let postedCount = 0;
 
@@ -96,7 +96,7 @@ export class XIntegrationService {
           // Add delay to avoid rate limits (3 seconds between tweets)
           await this.delay(3000);
         } catch (error: any) {
-          this.logger.error(`Failed to post event ${event._id as string}:`, error.message);
+          this.logger.error(`Failed to post event ${event._id as any}:`, error.message);
         }
       }
 
