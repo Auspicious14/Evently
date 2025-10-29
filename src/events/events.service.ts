@@ -69,7 +69,7 @@ export class EventsService {
       eventType,
       isFree
     } = filterEventDto;
-    const query = this.eventModel.find();
+    const query: any = this.eventModel.find();
 
     if (title) {
       query.where('title').regex(new RegExp(title, 'i'));
