@@ -10,7 +10,7 @@ export class FilterEventDto extends PaginationQueryDto {
   @IsOptional()
   location?: string;
 
-  @IsEnum(['AI', 'Fintech', 'Startup', 'Coding', 'Hardware', 'Design', 'Marketing', 'Cybersecurity', 'Virtual'])
+  @IsEnum(['AI', 'Fintech', 'Startup', 'Coding', 'Hardware', 'Design', 'Marketing', 'Cybersecurity', 'Virtual', 'Physical'])
   @IsOptional()
   category?: string;
 
@@ -30,3 +30,4 @@ export class FilterEventDto extends PaginationQueryDto {
   @IsOptional()
   postedToX?: boolean;
 }
+
