@@ -29,7 +29,7 @@ export class XIntegrationService {
     });
   }
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron('*/5 * * * *')
   async handleCron() {
     this.logger.log('Running X integration cron job...');
     try {
