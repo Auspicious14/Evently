@@ -18,7 +18,7 @@ export class EventsService {
     userId?: string,
     images?: Express.Multer.File[],
   ): Promise<{ success: boolean, data: Partial<Event> }> {
-    // Check for duplicate tweet if from Twitter
+
     if (createEventDto.sourceTweetId) {
       const existing = await this.eventModel.findOne({ 
         sourceTweetId: createEventDto.sourceTweetId 
@@ -31,6 +31,8 @@ export class EventsService {
     const imageUrls = images
       ? await Promise.all(images.map(image => this.cloudinaryService.uploadImage(image)))
       : [];
+    
+    const coordinates = this.geocodeLocation(createEventDto.location);
 
     const eventData = {
       ...createEventDto,
@@ -38,12 +40,16 @@ export class EventsService {
       submitterId: userId ? new Types.ObjectId(userId) : undefined,
       source: createEventDto.sourceType || (userId ? 'manual' : 'x'),
       status: createEventDto.status || 'pending',
-      type: createEventDto.type || 'online'
+      eventType: createEventDto.eventType || 'online',
+      coordinates: coordinates ? {
+        type: 'Point',
+        coordinates: coordinates,
+      } : undefined,
     };
 
     const createdEvent = new this.eventModel(eventData);
-    const data: any = createdEvent.save();
-    return { success: true, data }
+    const data: any = await createdEvent.save();
+    return { success: true, data: data.toObject() }
 
   }
 
@@ -60,6 +66,8 @@ export class EventsService {
       skip,
       status,
       postedToX,
+      eventType,
+      isFree
     } = filterEventDto;
     const query = this.eventModel.find();
 
@@ -73,6 +81,14 @@ export class EventsService {
 
     if (category) {
       query.where('category').equals(category);
+    }
+
+    if (eventType) {
+      query.eventType = eventType;
+    }
+
+    if (isFree !== undefined) {
+      query.isFree = isFree;
     }
 
     if (dateFrom || dateTo) {
@@ -89,14 +105,18 @@ export class EventsService {
     if (postedToX !== undefined) {
       query.where('postedToX').equals(postedToX);
     }
+    
+    const [events, total] = await Promise.all([
+      this.eventModel
+        .find(query)
+        .sort({ date: 1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.eventModel.countDocuments(query).exec(),
+    ]);
 
-    query
-      .sort({ date: 1 }) 
-      .skip((skip as number) || 0)
-      .limit((limit as number) || 10);
-
-    const events = await query.exec();
-    return { success: true, data: events };
+    return { success: true, data: events, total };
   }
 
   async findOne(id: string): Promise<{ success: true; data: Event }> {
@@ -209,5 +229,34 @@ export class EventsService {
       .sort({ date: 1 })
       .limit(10)
       .exec();
+  }
+
+  private geocodeLocation(location: string): [number, number] | null {
+    const cityCoords: Record<string, [number, number]> = {
+      'Lagos': [3.3792, 6.5244],
+      'Abuja': [7.3986, 9.0765],
+      'Port Harcourt': [7.0498, 4.8156],
+      'Kano': [8.5919, 12.0022],
+      'Ibadan': [3.9470, 7.3775],
+      'Kaduna': [7.4165, 10.5105],
+      'Benin City': [5.6037, 6.3350],
+      'Enugu': [7.5105, 6.5244],
+      'Jos': [8.8583, 9.8965],
+      'Ilorin': [4.5500, 8.5000],
+      'Aba': [7.3667, 5.1167],
+      'Onitsha': [6.7833, 6.1500],
+      'Warri': [5.7500, 5.5167],
+      'Calabar': [8.3417, 4.9517],
+      'Uyo': [7.9333, 5.0333],
+    };
+
+    const locationLower = location.toLowerCase();
+    for (const [city, coords] of Object.entries(cityCoords)) {
+      if (locationLower.includes(city.toLowerCase())) {
+        return coords;
+      }
+    }
+
+    return null;
   }
 }
