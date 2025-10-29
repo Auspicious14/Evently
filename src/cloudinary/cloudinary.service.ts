@@ -5,7 +5,7 @@ import { Readable } from 'stream';
 
 @Injectable()
 export class CloudinaryService {
-  constructor(@Inject('Cloudinary') private cloudinary: typeof cloudinary) {}
+  constructor(@Inject('Cloudinary') private cloudinary: any) {}
 
   async uploadImage(file: Express.Multer.File): Promise<string> {
     return new Promise((resolve, reject) => {
