@@ -43,6 +43,10 @@ export class CreateEventDto {
   @IsOptional()
   status?: string;
 
+  @IsEnum(['online', 'in-person'])
+  @IsOptional()
+  type?: string;
+
   @IsBoolean()
   @IsOptional()
   postedToX?: boolean;
