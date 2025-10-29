@@ -112,7 +112,6 @@ export class EventsService {
     _id: { $ne: id },
     $or: [
       { category: event.category },
-      { tags: { $in: event.tags || [] } },
       { location: event.location },
       {
         date: {
