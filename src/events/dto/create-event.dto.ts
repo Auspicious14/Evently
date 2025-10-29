@@ -45,7 +45,7 @@ export class CreateEventDto {
 
   @IsEnum(['online', 'in-person'])
   @IsOptional()
-  type?: string;
+  eventType?: string;
 
   @IsBoolean()
   @IsOptional()
