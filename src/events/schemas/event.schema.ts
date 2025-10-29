@@ -42,7 +42,7 @@ export class Event {
   status: string;
 
   @Prop({ default: 'online', enum: ['online', 'in-person'] })
-  type: string;
+  eventType: string;
 
   @Prop({ default: 0 })
   upvotes: number;
