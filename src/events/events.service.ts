@@ -55,7 +55,7 @@ export class EventsService {
 
   async findAll(
     filterEventDto: Partial<FilterEventDto>,
-  ): Promise<{ success: boolean; data: Event[] }> {
+  ): Promise<{ success: boolean; data: Event[], total: number }> {
     const {
       title,
       location,
