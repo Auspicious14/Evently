@@ -28,7 +28,7 @@ export class FilterEventDto extends PaginationQueryDto {
 
   @IsEnum(['online', 'in-person'])
   @IsOptional()
-  EventType?: string;
+  eventType?: string;
 
   @IsBoolean()
   @IsOptional()
