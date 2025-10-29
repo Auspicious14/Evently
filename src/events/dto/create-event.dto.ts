@@ -1,3 +1,4 @@
+// dto/create-event.dto.ts - COMPLETE
 import { IsString, IsNotEmpty, IsDateString, IsOptional, IsUrl, IsBoolean, IsEnum } from 'class-validator';
 
 export class CreateEventDto {
@@ -17,7 +18,7 @@ export class CreateEventDto {
   @IsNotEmpty()
   location: string;
 
-  @IsEnum(['AI', 'Fintech', 'Startup', 'Coding', 'Hardware', 'Design', 'Marketing', 'Cybersecurity', 'Virtual'])
+  @IsEnum(['AI', 'Fintech', 'Startup', 'Coding', 'Hardware', 'Design', 'Marketing', 'Cybersecurity', 'Virtual', 'Physical'])
   @IsNotEmpty()
   category: string;
 
@@ -29,10 +30,10 @@ export class CreateEventDto {
   @IsOptional()
   link?: string;
 
-  // Optional fields for Twitter integration
+  // Twitter integration fields
   @IsString()
   @IsOptional()
-  sourceType?: string; // 'manual' or 'x'
+  sourceType?: string;
 
   @IsString()
   @IsOptional()
