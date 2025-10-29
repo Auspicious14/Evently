@@ -5,9 +5,6 @@ export type EventDocument = Event & Document;
 
 @Schema({ timestamps: true })
 export class Event {
-  @Prop()
-  _id?: string;
-
   @Prop({ required: true })
   title: string;
 
@@ -55,6 +52,31 @@ export class Event {
 
   @Prop()
   postedToXAt?: Date;
+
+  // Add coordinates for map
+  @Prop({
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+    },
+    coordinates: {
+      type: [Number],
+      default: [0, 0],
+    },
+  })
+  coordinates?: {
+    type: string;
+    coordinates: [number, number]; // [longitude, latitude]
+  };
+
+  // Add view count
+  @Prop({ default: 0 })
+  views?: number;
+
+  // Add going count (RSVP)
+  @Prop({ default: 0 })
+  goingCount?: number;
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);
@@ -64,3 +86,4 @@ EventSchema.index({ date: 1, status: 1 });
 EventSchema.index({ category: 1, status: 1 });
 EventSchema.index({ status: 1, postedToX: 1 });
 EventSchema.index({ sourceTweetId: 1 }, { unique: true, sparse: true });
+EventSchema.index({ coordinates: '2dsphere' }); // Geospatial index for map queries
