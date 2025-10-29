@@ -26,6 +26,14 @@ export class FilterEventDto extends PaginationQueryDto {
   @IsOptional()
   status?: string;
 
+  @IsEnum(['online', 'in-person'])
+  @IsOptional()
+  EventType?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isFree?: boolean;
+
   @IsBoolean()
   @IsOptional()
   postedToX?: boolean;
