@@ -4,16 +4,19 @@ import { Model, Types } from 'mongoose';
 import { Event, EventDocument } from './schemas/event.schema';
 import { CreateEventDto } from './dto/create-event.dto';
 import { FilterEventDto } from './dto/filter-event.dto';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   async create(
     createEventDto: CreateEventDto,
     userId?: string,
+    images?: Express.Multer.File[],
   ): Promise<{ success: boolean, data: Partial<Event> }> {
     // Check for duplicate tweet if from Twitter
     if (createEventDto.sourceTweetId) {
@@ -25,8 +28,13 @@ export class EventsService {
       }
     }
 
+    const imageUrls = images
+      ? await Promise.all(images.map(image => this.cloudinaryService.uploadImage(image)))
+      : [];
+
     const eventData = {
       ...createEventDto,
+      imageUrls,
       submitterId: userId ? new Types.ObjectId(userId) : undefined,
       source: createEventDto.sourceType || (userId ? 'manual' : 'x'),
       status: createEventDto.status || 'pending',

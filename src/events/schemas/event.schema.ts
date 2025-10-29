@@ -77,6 +77,9 @@ export class Event {
   // Add going count (RSVP)
   @Prop({ default: 0 })
   goingCount?: number;
+
+  @Prop({ type: [String] })
+  imageUrls?: string[];
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);
