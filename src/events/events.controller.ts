@@ -43,13 +43,8 @@ export class EventsController {
   }
 
   @Get(':id/similar')
-  async getSimilar(@Param('id') id: string) {
-    const event = await this.eventsService.findOne(id);
-    const similar = await this.eventsService.getSimilar(
-      id, 
-      event.data.category
-    );
-    return { success: true, data: similar };
+  getSimilar(@Param('id') id: string) {
+    return this.eventsService.getSimilar(id);
   }
 
   @UseGuards(JwtAuthGuard)
