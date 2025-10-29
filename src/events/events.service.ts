@@ -82,7 +82,7 @@ export class EventsService {
     }
 
     query
-      .sort({ date: 1 }) // Sort by date ascending
+      .sort({ date: 1 }) 
       .skip((skip as number) || 0)
       .limit((limit as number) || 10);
 
@@ -96,6 +96,46 @@ export class EventsService {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
     return { success: true, data: event };
+  }
+
+  async getSimilar(
+  id: string,
+  category: string
+): Promise<{ success: true; data: Event[] }> {
+  
+  const event = await this.eventModel.findById(id).lean();
+
+  if (!event) {
+    throw new NotFoundException(`Event with ID "${id}" not found`);
+  }
+
+  const query: Record<string, any> = {
+    _id: { $ne: id },
+    $or: [
+      { category: event.category },
+      { tags: { $in: event.tags || [] } },
+      { location: event.location },
+      {
+        date: {
+          $gte: new Date(event.date.getTime() - 7 * 24 * 60 * 60 * 1000), // within 7 days before
+          $lte: new Date(event.date.getTime() + 7 * 24 * 60 * 60 * 1000), // within 7 days after
+        },
+      },
+    ],
+  };
+
+  const similarEvents = await this.eventModel
+    .find(query)
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .lean()
+    .exec();
+
+  if (similarEvents.length === 0) {
+    throw new NotFoundException(`No similar events found for ID "${id}"`);
+  }
+
+  return { success: true, data: similarEvents };
   }
 
   async upvote(id: string): Promise<{ success: true; data: Event }> {
