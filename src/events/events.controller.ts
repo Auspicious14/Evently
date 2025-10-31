@@ -46,8 +46,9 @@ export class EventsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.eventsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    const userId = req.user?.userId || req.user?.sub;
+    return this.eventsService.findOne(id, userId);
   }
 
   @Get(':id/similar')
@@ -57,14 +58,16 @@ export class EventsController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/upvote')
-  upvote(@Param('id') id: string) {
-    return this.eventsService.upvote(id);
+  upvote(@Param('id') id: string, @Request() req) {
+    const userId = req.user.userId || req.user.sub;
+    return this.eventsService.upvote(id, userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/flag')
-  flag(@Param('id') id: string) {
-    return this.eventsService.flag(id);
+  flag(@Param('id') id: string, @Request() req) {
+    const userId = req.user.userId || req.user.sub;
+    return this.eventsService.flag(id, userId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

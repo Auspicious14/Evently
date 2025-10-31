@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { XIntegrationModule } from './x-integration/x-integration.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     AuthModule,
     XIntegrationModule,
     CloudinaryModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
