@@ -76,6 +76,9 @@ export class Event {
   // Add view count
   @Prop({ default: 0 })
   views?: number;
+  
+   @Prop({default: 0})
+  shares?: number
 
   // Add going count (RSVP)
   @Prop({ default: 0 })
