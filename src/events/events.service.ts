@@ -9,12 +9,14 @@ import { Event, EventDocument } from './schemas/event.schema';
 import { CreateEventDto } from './dto/create-event.dto';
 import { FilterEventDto } from './dto/filter-event.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { DashboardService } from '../dashboard/dashboard.service';
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly dashboardService: DashboardService,
   ) {}
 
   async create(
@@ -57,6 +59,15 @@ export class EventsService {
 
     const createdEvent = new this.eventModel(eventData);
     const data: any = await createdEvent.save();
+
+    // Track activity
+    if (userId) {
+      await this.dashboardService.trackActivity(userId, 'event_create', data._id.toString(), {
+        category: data.category,
+        location: data.location,
+      });
+    }
+
     return { success: true, data: data.toObject() };
   }
 
@@ -126,11 +137,22 @@ export class EventsService {
     return { success: true, data: events, total };
   }
 
-  async findOne(id: string): Promise<{ success: true; data: Event }> {
-    const event = await this.eventModel.findById(id).exec();
+  async findOne(id: string, userId?: string): Promise<{ success: true; data: Event }> {
+    const event = await this.eventModel.findByIdAndUpdate(
+      id,
+      { $inc: { views: 1 } },
+      { new: true },
+    ).exec();
+
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
+
+    // Track view activity
+    if (userId) {
+      await this.dashboardService.trackActivity(userId, 'event_view', id);
+    }
+
     return { success: true, data: event };
   }
 
@@ -169,7 +191,7 @@ export class EventsService {
     return { success: true, data: similarEvents };
   }
 
-  async upvote(id: string): Promise<{ success: true; data: Event }> {
+  async upvote(id: string, userId: string): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findByIdAndUpdate(
       id,
       { $inc: { upvotes: 1 } },
@@ -178,10 +200,14 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
+
+    // Track activity
+    await this.dashboardService.trackActivity(userId, 'event_upvote', id);
+
     return { success: true, data: event };
   }
 
-  async flag(id: string): Promise<{ success: true; data: Event }> {
+  async flag(id: string, userId: string): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findByIdAndUpdate(
       id,
       { $inc: { flags: 1 } },
@@ -190,6 +216,10 @@ export class EventsService {
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
+
+    // Track activity
+    await this.dashboardService.trackActivity(userId, 'event_flag', id);
+
     return { success: true, data: event };
   }
 
@@ -197,14 +227,24 @@ export class EventsService {
     id: string,
     status: string,
   ): Promise<{ success: true; data: Event }> {
-    const event = await this.eventModel.findByIdAndUpdate(
-      id,
-      { status },
-      { new: true },
-    );
+    const event = await this.eventModel.findById(id);
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
+
+    const oldStatus = event.status;
+    event.status = status;
+    await event.save();
+
+    // Update stats
+    if (event.submitterId) {
+      await this.dashboardService.updateEventStatusInStats(
+        event.submitterId.toString(),
+        oldStatus,
+        status,
+      );
+    }
+
     return { success: true, data: event };
   }
 
