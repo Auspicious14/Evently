@@ -27,6 +27,9 @@ export class UserActivity {
 
   @Prop({ type: String })
   userAgent?: string;
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const UserActivitySchema = SchemaFactory.createForClass(UserActivity);
