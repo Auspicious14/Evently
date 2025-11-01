@@ -86,6 +86,9 @@ export class Event {
 
   @Prop({ type: [String] })
   imageUrls?: string[];
+
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);
