@@ -56,6 +56,9 @@ export class Event {
   @Prop()
   postedToXAt?: Date;
 
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  upvotedBy: Types.ObjectId[];
+
   // Add coordinates for map
   @Prop({
     type: {
@@ -98,4 +101,5 @@ EventSchema.index({ date: 1, status: 1 });
 EventSchema.index({ category: 1, status: 1 });
 EventSchema.index({ status: 1, postedToX: 1 });
 EventSchema.index({ sourceTweetId: 1 }, { unique: true, sparse: true });
-EventSchema.index({ coordinates: '2dsphere' }); // Geospatial index for map queries
+EventSchema.index({ coordinates: '2dsphere' }); 
+EventSchema.index({ upvotedBy: 1 })
