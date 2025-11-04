@@ -73,6 +73,7 @@ export class EventsService {
 
   async findAll(
     filterEventDto: Partial<FilterEventDto>,
+    user?: any,
   ): Promise<{ success: boolean; data: Event[]; total: number }> {
     const {
       title,
@@ -87,51 +88,81 @@ export class EventsService {
       eventType,
       isFree,
     } = filterEventDto;
-    const query: any = this.eventModel.find();
+
+    const queryConditions: any = {};
 
     if (title) {
-      query.where('title').regex(new RegExp(title, 'i'));
+      queryConditions.title = { $regex: new RegExp(title, 'i') };
     }
 
     if (location) {
-      query.where('location').regex(new RegExp(location, 'i'));
+      queryConditions.location = { $regex: new RegExp(location, 'i') };
     }
 
     if (category) {
-      query.where('category').equals(category);
+      queryConditions.category = category;
     }
 
     if (eventType) {
-      query.eventType = eventType;
+      queryConditions.eventType = eventType;
     }
 
     if (isFree !== undefined) {
-      query.isFree = isFree;
+      queryConditions.isFree = isFree;
     }
 
     if (dateFrom || dateTo) {
-      const dateQuery: any = {};
-      if (dateFrom) dateQuery.$gte = new Date(dateFrom);
-      if (dateTo) dateQuery.$lte = new Date(dateTo);
-      query.where('date').gte(dateQuery.$gte).lte(dateQuery.$lte);
-    }
-
-    if (status) {
-      query.where('status').equals(status);
+      queryConditions.date = {};
+      if (dateFrom) queryConditions.date.$gte = new Date(dateFrom);
+      if (dateTo) queryConditions.date.$lte = new Date(dateTo);
     }
 
     if (postedToX !== undefined) {
-      query.where('postedToX').equals(postedToX);
+      queryConditions.postedToX = postedToX;
     }
 
+    const isAdmin = user && user.role === 'admin';
+
+    if (isAdmin) {
+      if (status) {
+        queryConditions.status = status;
+      }
+    } else if (user) {
+      const userId = user.userId || user.sub;
+      queryConditions.$or = [
+        { status: 'approved' },
+        { status: 'pending', submitterId: new Types.ObjectId(userId) },
+      ];
+      if (status) {
+        if (status === 'approved') {
+          delete queryConditions.$or;
+          queryConditions.status = 'approved';
+        } else if (status === 'pending') {
+          delete queryConditions.$or;
+          queryConditions.status = 'pending';
+          queryConditions.submitterId = new Types.ObjectId(userId);
+        } else {
+          queryConditions._id = null;
+        }
+      }
+    } else {
+      queryConditions.status = 'approved';
+      if (status && status !== 'approved') {
+        queryConditions._id = null;
+      }
+    }
+
+    const findQuery = this.eventModel
+      .find(queryConditions)
+      .sort({ date: 1 })
+      .skip(skip)
+      .limit(limit);
+
+    const countQuery = this.eventModel.countDocuments(queryConditions);
+
     const [events, total] = await Promise.all([
-      this.eventModel
-        .find(query)
-        .sort({ date: 1 })
-        .skip(skip)
-        .limit(limit)
-        .exec(),
-      this.eventModel.countDocuments(query).exec(),
+      findQuery.exec(),
+      countQuery.exec(),
     ]);
 
     return { success: true, data: events, total };

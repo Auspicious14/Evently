@@ -22,6 +22,7 @@ import { FilterEventDto } from './dto/filter-event.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtOptionalAuthGuard } from '../auth/guards/jwt-optional-auth.guard';
 
 @Controller('events')
 export class EventsController {
@@ -41,9 +42,10 @@ export class EventsController {
   }
 
   @Get()
+  @UseGuards(JwtOptionalAuthGuard)
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  findAll(@Query() filterEventDto: FilterEventDto) {
-    return this.eventsService.findAll(filterEventDto);
+  findAll(@Query() filterEventDto: FilterEventDto, @Request() req) {
+    return this.eventsService.findAll(filterEventDto, req.user);
   }
 
   @Get(':id')
