@@ -5,6 +5,7 @@ import {
   Body, 
   Param, 
   Patch, 
+  Delete,
   Query, 
   UsePipes, 
   ValidationPipe, 
@@ -61,6 +62,13 @@ export class EventsController {
   upvote(@Param('id') id: string, @Request() req) {
     const userId = req.user.userId || req.user.sub;
     return this.eventsService.upvote(id, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id/upvote')
+  removeUpvote(@Param('id') id: string, @Request() req) {
+    const userId = req.user.userId || req.user.sub;
+    return this.eventsService.removeUpvote(id, userId);
   }
 
   @UseGuards(JwtAuthGuard)
