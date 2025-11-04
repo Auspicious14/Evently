@@ -153,7 +153,15 @@ export class EventsService {
       await this.dashboardService.trackActivity(userId, 'event_view', id);
     }
 
-    return { success: true, data: event };
+    // Check if user has already upvoted
+    const eventData: any = event.toObject();
+    if (userId) {
+      eventData.hasUpvoted = event.upvotedBy.some(
+        (uid) => uid.toString() === userId
+      );
+    }
+
+    return { success: true, data: eventData };
   }
 
   async getSimilar(id: string): Promise<{ success: true; data: Event[] }> {
@@ -191,18 +199,58 @@ export class EventsService {
     return { success: true, data: similarEvents };
   }
 
-  async upvote(id: string, userId: string): Promise<{ success: true; data: Event }> {
-    const event = await this.eventModel.findByIdAndUpdate(
-      id,
-      { $inc: { upvotes: 1 } },
-      { new: true },
-    );
+  async upvote(id: string, userId: string): Promise<{ success: true; data: Event; message?: string }> {
+    const event = await this.eventModel.findById(id);
+    
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
 
+    const userObjectId = new Types.ObjectId(userId);
+
+    const hasUpvoted = event.upvotedBy.some(
+      (uid) => uid.toString() === userId
+    );
+
+    if (hasUpvoted) {
+      throw new BadRequestException('You have already upvoted this event');
+    }
+
+    event.upvotes += 1;
+    event.upvotedBy.push(userObjectId);
+    await event.save();
+
     // Track activity
     await this.dashboardService.trackActivity(userId, 'event_upvote', id);
+
+    return { 
+      success: true, 
+      data: event,
+      message: 'Event upvoted successfully'
+    };
+  }
+
+  async removeUpvote(id: string, userId: string): Promise<{ success: true; data: Event }> {
+    const event = await this.eventModel.findById(id);
+    
+    if (!event) {
+      throw new NotFoundException(`Event with ID "${id}" not found`);
+    }
+
+    const hasUpvoted = event.upvotedBy.some(
+      (uid) => uid.toString() === userId
+    );
+
+    if (!hasUpvoted) {
+      throw new BadRequestException('You have not upvoted this event');
+    }
+
+    // Remove upvote
+    event.upvotes = Math.max(0, event.upvotes - 1);
+    event.upvotedBy = event.upvotedBy.filter(
+      (uid) => uid.toString() !== userId
+    );
+    await event.save();
 
     return { success: true, data: event };
   }
