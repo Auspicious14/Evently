@@ -51,4 +51,10 @@ export class DashboardController {
     const userId = req.user.userId || req.user.sub;
     return this.dashboardService.getActivityTrend(userId, parseInt(days));
   }
+
+  @Get('upvoted-events')
+  async getUpvotedEvents(@Request() req) {
+    const userId = req.user.userId || req.user.sub;
+    return this.dashboardService.getUpvotedEvents(userId);
+  }
 }

@@ -16,6 +16,7 @@
     "start:prod": "node --max-old-space-size=512 dist/main.js"
   },
   "dependencies": {
+    "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
@@ -33,13 +34,13 @@
     "express-session": "^1.18.2",
     "mongoose": "^8.4.1",
     "multer": "^2.0.2",
+    "nodemailer": "^7.0.10",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-twitter": "^1.0.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "twitter-api-v2": "^1.27.0",
-    "cloudinary": "^2.8.0"
+    "twitter-api-v2": "^1.27.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

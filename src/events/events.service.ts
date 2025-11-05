@@ -10,6 +10,7 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { FilterEventDto } from './dto/filter-event.dto';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { DashboardService } from '../dashboard/dashboard.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class EventsService {
@@ -17,6 +18,7 @@ export class EventsService {
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly dashboardService: DashboardService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -67,6 +69,8 @@ export class EventsService {
         location: data.location,
       });
     }
+
+    await this.notificationsService.sendEventCreationNotification(data);
 
     return { success: true, data: data.toObject() };
   }
@@ -254,6 +258,8 @@ export class EventsService {
     // Track activity
     await this.dashboardService.trackActivity(userId, 'event_upvote', id);
 
+    await this.notificationsService.sendUpvoteNotification(event, userId);
+
     return { 
       success: true, 
       data: event,
@@ -323,7 +329,9 @@ export class EventsService {
         status,
       );
     }
-
+    if (status === 'approved') {
+      await this.notificationsService.sendEventApprovalNotification(event);
+    }
     return { success: true, data: event };
   }
 
