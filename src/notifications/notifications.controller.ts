@@ -10,12 +10,14 @@ export class NotificationsController {
   @Get()
   async getNotifications(@Request() req) {
     const userId = req.user.userId || req.user.sub;
-    return this.notificationsService.findByUserId(userId);
+    const notifications = await this.notificationsService.findByUserId(userId);
+    return { success: true, data: notifications };
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/read')
   async markAsRead(@Param('id') id: string) {
-    return this.notificationsService.markAsRead(id);
+    const notification = await this.notificationsService.markAsRead(id);
+    return { success: true, data: notification };
   }
 }
