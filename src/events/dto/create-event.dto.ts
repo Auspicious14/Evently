@@ -54,6 +54,12 @@ export class CreateEventDto {
   @IsOptional()
   eventType?: string;
 
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    if (typeof value === 'boolean') return value;
+    return value;
+  })
   @IsBoolean()
   @IsOptional()
   postedToX?: boolean;
