@@ -30,7 +30,11 @@ export class EventsController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  @UseInterceptors(FilesInterceptor('images', 10))
+  @UseInterceptors(
+  FileFieldsInterceptor([
+    { name: 'images', maxCount: 5 },
+  ]),
+)
   @UsePipes(new ValidationPipe({ 
   transform: true,
   transformOptions: {
@@ -38,12 +42,14 @@ export class EventsController {
   }
 }))
   create(
-    @UploadedFiles() images: Express.Multer.File[],
+    @UploadedFiles() files: Express.Multer.File[],
     @Body() createEventDto: CreateEventDto,
     @Request() req,
   ) {
     const userId = req.user.userId || req.user.sub;
-    return this.eventsService.create(createEventDto, userId, images);
+    console.log('FILES RECEIVED:', files.images?.length);
+console.log('FIRST FILE:', files.images?.[0]?.originalname);
+    return this.eventsService.create(createEventDto, userId, files.images);
   }
 
   @Get()
