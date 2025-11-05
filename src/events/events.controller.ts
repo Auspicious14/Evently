@@ -28,30 +28,29 @@ import { JwtOptionalAuthGuard } from '../auth/guards/jwt-optional-auth.guard';
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard) 
   @Post()
-  @UseInterceptors(
-  FileFieldsInterceptor([
-    { name: 'images', maxCount: 5 },
-  ]),
-)
+  @UseInterceptors(FilesInterceptor('images', 10))
   @UsePipes(new ValidationPipe({ 
   transform: true,
   transformOptions: {
     enableImplicitConversion: true
   }
 }))
-  create(
-    @UploadedFiles() files: Express.Multer.File[],
-    @Body() createEventDto: CreateEventDto,
-    @Request() req,
-  ) {
-    const userId = req.user.userId || req.user.sub;
-    console.log('FILES RECEIVED:', files.images?.length);
-console.log('FIRST FILE:', files.images?.[0]?.originalname);
-    return this.eventsService.create(createEventDto, userId, files.images);
-  }
+create(
+  @UploadedFiles() images: Express.Multer.File[],
+  @Body() createEventDto: CreateEventDto,
+  @Request() req,
+) {
+  console.log('RAW REQ.BODY:', req.body);
+  console.log('RAW REQ.FILES:', req.files);
+  console.log('IMAGES LENGTH:', images?.length);
+  console.log('FIRST FILE NAME:', images?.[0]?.originalname);
 
+  const userId = req.user.userId || req.user.sub;
+  return this.eventsService.create(createEventDto, userId, images);
+}
+  
   @Get()
   @UseGuards(JwtOptionalAuthGuard)
   @UsePipes(new ValidationPipe({ 
