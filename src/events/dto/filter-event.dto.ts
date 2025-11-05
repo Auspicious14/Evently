@@ -41,11 +41,6 @@ export class FilterEventDto extends PaginationQueryDto {
   @IsOptional()
   postedToX?: boolean;
 
-  @IsEnum(['online', 'in-person'])
-  @IsOptional()
-  eventType?: string;
-
-  // Transform string "true"/"false" to boolean
   @Transform(({ value }) => {
     if (value === 'true') return true;
     if (value === 'false') return false;
