@@ -31,7 +31,12 @@ export class EventsController {
   @UseGuards(JwtAuthGuard)
   @Post()
   @UseInterceptors(FilesInterceptor('images', 10))
-  @UsePipes(new ValidationPipe({ transform: true }))
+  @UsePipes(new ValidationPipe({ 
+  transform: true,
+  transformOptions: {
+    enableImplicitConversion: true
+  }
+}))
   create(
     @UploadedFiles() images: Express.Multer.File[],
     @Body() createEventDto: CreateEventDto,
@@ -43,7 +48,13 @@ export class EventsController {
 
   @Get()
   @UseGuards(JwtOptionalAuthGuard)
-  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @UsePipes(new ValidationPipe({ 
+    transform: true, 
+    whitelist: true,
+    transformOptions: {
+      enableImplicitConversion: true
+    }
+  }))
   findAll(@Query() filterEventDto: FilterEventDto, @Request() req) {
     return this.eventsService.findAll(filterEventDto, req.user);
   }
