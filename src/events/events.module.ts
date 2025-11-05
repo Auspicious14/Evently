@@ -5,12 +5,14 @@ import { EventsService } from './events.service';
 import { Event, EventSchema } from './schemas/event.schema';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Event.name, schema: EventSchema }]),
     CloudinaryModule,
     DashboardModule,
+    NotificationsModule,
   ],
   controllers: [EventsController],
   providers: [EventsService],

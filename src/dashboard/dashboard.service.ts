@@ -278,4 +278,24 @@ export class DashboardService {
 
     return await stats.save();
   }
+
+  async getUpvotedEvents(userId: string): Promise<EventPerformanceDto[]> {
+    const events = await this.eventModel
+      .find({ upvotedBy: new Types.ObjectId(userId) })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return events.map(event => ({
+      eventId: event._id.toString(),
+      title: event.title,
+      category: event.category,
+      location: event.location,
+      date: event.date,
+      upvotes: event.upvotes,
+      views: event.views || 0,
+      shares: event.shares || 0,
+      status: event.status,
+      createdAt: event.createdAt,
+    }));
+  }
 }
