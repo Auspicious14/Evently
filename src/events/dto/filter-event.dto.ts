@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { Transform } from 'class-transformer';
 
 export class FilterEventDto extends PaginationQueryDto {
   @IsString()
