@@ -1,5 +1,6 @@
 // dto/create-event.dto.ts - COMPLETE
 import { IsString, IsNotEmpty, IsDateString, IsOptional, IsUrl, IsBoolean, IsEnum } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateEventDto {
   @IsString()
@@ -22,6 +23,12 @@ export class CreateEventDto {
   @IsNotEmpty()
   category: string;
 
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    if (typeof value === 'boolean') return value;
+    return value;
+  })
   @IsBoolean()
   @IsOptional()
   isFree?: boolean;
