@@ -6,8 +6,14 @@ import { Notification, NotificationDocument } from './schemas/notification.schem
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { Event, EventDocument } from '../events/schemas/event.schema';
 
-interface INotificationEvent extends Event {
+interface INotificationEvent {
   _id: string
+  submitterId: string | Types.ObjectId
+  title: string
+  description: string
+  date: string
+  eventType: string
+  
 }
 
 @Injectable()
