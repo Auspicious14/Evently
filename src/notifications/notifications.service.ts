@@ -6,6 +6,10 @@ import { Notification, NotificationDocument } from './schemas/notification.schem
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { Event, EventDocument } from '../events/schemas/event.schema';
 
+interface INotificationEvent extends Event {
+  _id: string
+}
+
 @Injectable()
 export class NotificationsService {
   constructor(
@@ -37,7 +41,7 @@ export class NotificationsService {
     });
   }
 
-  async sendEventCreationNotification(event: Event): Promise<void> {
+  async sendEventCreationNotification(event: INotificationEvent): Promise<void> {
     const admins = await this.userModel.find({ role: 'admin' }).exec();
     for (const admin of admins) {
       const message = `A new event "${event.title}" has been created and is waiting for approval.`;
@@ -46,7 +50,7 @@ export class NotificationsService {
     }
   }
 
-  async sendEventApprovalNotification(event: Event): Promise<void> {
+  async sendEventApprovalNotification(event: INotificationEvent): Promise<void> {
     const user = await this.userModel.findById(event.submitterId).exec();
     if (user) {
       const message = `Your event "${event.title}" has been approved.`;
@@ -55,7 +59,7 @@ export class NotificationsService {
     }
   }
 
-  async sendUpvoteNotification(event: Event, upvoterId: string): Promise<void> {
+  async sendUpvoteNotification(event: INotificationEvent, upvoterId: string): Promise<void> {
     const upvoter = await this.userModel.findById(upvoterId).exec();
     const eventCreator = await this.userModel.findById(event.submitterId).exec();
     if (upvoter && eventCreator) {
