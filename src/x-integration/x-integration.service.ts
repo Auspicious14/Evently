@@ -905,7 +905,6 @@ export class XIntegrationService {
       'purchase',
       'fee',
       'paid',
-      '
       'register and pay',
       'entrance fee',
       'cost',
