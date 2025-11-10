@@ -4,12 +4,26 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventsService } from '../events/events.service';
 import { TwitterApi } from 'twitter-api-v2';
 import { CreateEventDto } from '../events/dto/create-event.dto';
+import { RateLimitPlugin } from '@twitter-api-v2/plugin-rate-limit';
 
 @Injectable()
 export class XIntegrationService {
   private readonly logger = new Logger(XIntegrationService.name);
   private twitterClient: TwitterApi;
   private readWriteClient: TwitterApi;
+  private rateLimitPlugin: RateLimitPlugin;
+  private spamRegex: RegExp;
+  private nigeriaLocationRegex: RegExp;
+  private strongKeywordRegex: RegExp;
+  private dateIndicatorRegex: RegExp;
+  private nextDayRegex: RegExp;
+  private timeIndicatorRegex: RegExp;
+  private emojiRegex: RegExp;
+  private badTitlePatterns: RegExp[];
+  private datePatterns: RegExp[];
+  private timePatterns: RegExp[];
+
+  private sinceIds = new Map<string, string>();
 
   private readonly nigeriaLocations = [
     'lagos',
@@ -54,45 +68,10 @@ export class XIntegrationService {
     'gra',
     'rivers state',
     'lagos state',
-    'abia',
-    'adamawa',
-    'akwa ibom',
-    'anambra',
-    'bauchi state',
-    'bayelsa',
-    'benue',
-    'borno',
-    'cross river',
-    'delta',
-    'ebonyi',
-    'edo',
-    'ekiti',
-    'enugu state',
-    'gombe',
-    'imo',
-    'jigawa',
-    'kaduna state',
-    'kano state',
-    'katsina',
-    'kebbi',
-    'kogi',
-    'kwara',
-    'nasarawa',
-    'niger',
-    'ogun',
-    'ondo',
-    'osun',
-    'oyo',
-    'plateau',
-    'sokoto state',
-    'taraba',
-    'yobe',
-    'zamfara',
     'fct',
   ];
 
   private readonly spamKeywords = [
-    'dm',
     'dm me',
     'direct message',
     'pm me',
@@ -116,7 +95,6 @@ export class XIntegrationService {
     'investment opportunity',
     'double your money',
     'casino',
-    'bet',
     'trading signal',
     'send money',
     'wire transfer',
@@ -129,14 +107,12 @@ export class XIntegrationService {
     'passive income',
     'mlm',
     'pyramid scheme',
-    'nft',
     'airdrop',
     'free crypto',
     'pump and dump',
     'binary options',
     'quick cash',
     'side hustle',
-
     'nude',
     'porn',
     'sex',
@@ -150,26 +126,18 @@ export class XIntegrationService {
     'body rub',
     'erotic',
     'sensual',
-    'escorts',
     'call girl',
     'prostitute',
     'booty call',
-
-    'loan',
     'quick loan',
     'bad credit',
     'no credit check',
     'guaranteed approval',
-    'invest now',
-
     'buy followers',
     'increase likes',
-    'viral',
     'hack account',
     'recover account',
     'password reset',
-    'free trial',
-    'subscription',
     'cancel anytime',
     'limited time offer',
     'act now',
@@ -182,7 +150,7 @@ export class XIntegrationService {
 
   private readonly suspiciousPatterns = [
     /dm\s+(me|for|to|now|pls|please|quick|fast)/i,
-    /whatsapp\s*(\+?\d{1,3})?[\s-]*\d{3}[\s-]*\d{3}[\s-]*\d{4}/i, // Phone numbers
+    /whatsapp\s*(\+?\d{1,3})?[\s-]*\d{3}[\s-]*\d{3}[\s-]*\d{4}/i,
     /\$\$\$/,
     /💰💰💰/,
     /🔞/,
@@ -191,19 +159,39 @@ export class XIntegrationService {
     /click\s+here/i,
     /link\s+in\s+bio/i,
     /bio\s+link/i,
-    /(earn|make|get|win)\s+\d{1,}[kK]?\s+(daily|weekly|monthly)/, // Earn X daily
+    /(earn|make|get|win)\s+\d{1,}[kK]?\s+(daily|weekly|monthly)/,
     /free\s+(gift|sample|trial|access)/i,
     /call\s+now/i,
     /text\s+me/i,
     /urgent\s+response/i,
   ];
 
+  private readonly monthMap: { [key: string]: number } = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11,
+  };
+
   constructor(
     private readonly eventsService: EventsService,
     private readonly configService: ConfigService,
   ) {
+    // Initialize rate limit plugin
+    this.rateLimitPlugin = new RateLimitPlugin();
+
+    // Initialize Twitter clients
     this.twitterClient = new TwitterApi(
       this.configService.get<string>('TWITTER_BEARER_TOKEN') as string,
+      { plugins: [this.rateLimitPlugin] },
     );
 
     this.readWriteClient = new TwitterApi({
@@ -216,100 +204,222 @@ export class XIntegrationService {
         'TWITTER_ACCESS_SECRET',
       ) as string,
     });
+
+    // Pre-compile all regex patterns for performance
+    this.initializeRegexPatterns();
   }
 
-  @Cron(CronExpression.EVERY_5_MINUTES, {
+  private initializeRegexPatterns(): void {
+    // Spam detection regex
+    const keywordPatterns = this.spamKeywords.map((kw) =>
+      kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    );
+    const allPatterns = [
+      ...keywordPatterns,
+      ...this.suspiciousPatterns.map((p) => p.source),
+    ];
+    this.spamRegex = new RegExp(allPatterns.join('|'), 'i');
+
+    // Nigeria location regex
+    const locationPattern = this.nigeriaLocations
+      .sort((a, b) => b.length - a.length)
+      .map((loc) => loc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
+    this.nigeriaLocationRegex = new RegExp(`\\b(${locationPattern})\\b`, 'i');
+
+    // Strong event keywords regex
+    const strongKeywords = [
+      'conference',
+      'summit',
+      'workshop',
+      'seminar',
+      'hackathon',
+      'meetup',
+      'tech event',
+      'startup event',
+      'developer conference',
+      'join us',
+      'register now',
+      'save the date',
+      'rsvp',
+      'tickets available',
+      'upcoming event',
+      'webinar',
+      'panel discussion',
+      'networking event',
+      'launch event',
+      'demo day',
+      'pitch night',
+    ];
+    this.strongKeywordRegex = new RegExp(
+      `\\b(${strongKeywords.join('|')})\\b`,
+      'i',
+    );
+
+    // Date and time indicators
+    this.dateIndicatorRegex =
+      /\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/i;
+    this.nextDayRegex =
+      /\b(next|this|upcoming)\s+(week|month|friday|saturday|sunday|monday|tuesday|wednesday|thursday)\b/i;
+    this.timeIndicatorRegex = /\b(\d{1,2}(:\d{2})?\s?(am|pm))\b/i;
+
+    // Emoji regex
+    this.emojiRegex = /[\u{1F000}-\u{1FFFF}]/gu;
+
+    // Bad title patterns
+    this.badTitlePatterns = [
+      /^(dm|call|text|whatsapp|join|click|link)/i,
+      /available for/i,
+      /^@\w+/,
+      /^\d+$/,
+      /^(rt|retweet|repost)/i,
+      /^http/,
+      /emoji\s*only/i,
+    ];
+
+    // Date patterns
+    this.datePatterns = [
+      /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/,
+      /\b(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/,
+      /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})\b/i,
+      /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})\b/i,
+      /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i,
+      /\b(next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+    ];
+
+    // Time patterns
+    this.timePatterns = [
+      /\b(\d{1,2}):(\d{2})\s?(am|pm|a\.m\.|p\.m\.)/i,
+      /\b(\d{1,2})\s?(am|pm|a\.m\.|p\.m\.)/i,
+      /\b(\d{1,2}):(\d{2})\b/,
+    ];
+  }
+
+  // Run every 30 minutes - good balance for Free/Basic tier
+  @Cron(CronExpression.EVERY_HOUR, {
     timeZone: 'Africa/Lagos',
   })
   async handleCron() {
     this.logger.log('Running X integration cron job for Nigerian events...');
+    
+    const startTime = Date.now();
+    
     try {
-      const cityGroups = [
-        'Lagos OR Abuja OR "Port Harcourt"',
-        'Kano OR Ibadan OR "Benin City"',
-        'Kaduna OR Enugu OR Jos OR Ilorin',
-        'Aba OR Onitsha OR Warri OR Calabar',
-        'Abeokuta OR Akure OR Bauchi OR Maiduguri',
-        'Zaria OR "Ile-Ife" OR Owerri OR Uyo',
-        'Sokoto OR Ogbomosho OR Ikeja OR "Victoria Island"',
-      ];
-
-      const baseEventTerms =
-        '(event OR conference OR workshop OR summit OR hackathon OR seminar OR webinar)';
+      // Optimized queries - only 3 strategic queries
       const baseFilters = '-is:retweet -is:reply lang:en';
-
-      const searchQueries = cityGroups.map(
-        (group) => `${baseEventTerms} (${group}) Nigeria`,
-      );
-
-      searchQueries.push(
-        'Nigeria (tech event OR startup event OR developer meetup OR hackathon OR tech conference OR AI summit) ${baseFilters}',
-        '(#LagosTech OR #AbujaTech OR #NaijaStartup OR #TechInNigeria OR #NigeriaStartup OR #NigerianTech OR #AfricaTech) (event OR conference OR meetup) ${baseFilters}',
-        '(blockchain OR fintech OR AI OR machine learning OR cybersecurity) event Nigeria ${baseFilters}',
-        'startup pitch OR investor meetup OR founder summit Nigeria ${baseFilters}',
-        'Nigeria (networking event OR demo day OR pitch night OR tech webinar) ${baseFilters}',
-        '(edtech OR healthtech OR agritech) event Nigeria ${baseFilters}',
-      );
+      const searchQueries = [
+        // Major cities + events
+        `(event OR conference OR workshop OR summit OR hackathon) (Lagos OR Abuja OR "Port Harcourt" OR Kano OR Ibadan) ${baseFilters}`,
+        
+        // Tech-specific with hashtags
+        `(#LagosTech OR #NaijaTech OR #NigerianTech OR #TechInNigeria) (conference OR meetup OR hackathon OR event) ${baseFilters}`,
+        
+        // Tech domains
+        `Nigeria (blockchain OR fintech OR AI OR "machine learning" OR cybersecurity OR startup) (summit OR conference OR event OR meetup) ${baseFilters}`,
+      ];
 
       let processedCount = 0;
       const maxResultsPerQuery = 100;
-      const concurrentLimit = 3;
+      const eventsToCreate: CreateEventDto[] = [];
+      const seenTweetIds = new Set<string>();
 
-      const queryBatches = [];
-      for (let i = 0; i < searchQueries.length; i += concurrentLimit) {
-        queryBatches.push(searchQueries.slice(i, i + concurrentLimit));
-      }
+      // Process queries sequentially to respect rate limits
+      for (const query of searchQueries) {
+        try {
+          const sinceId = this.sinceIds.get(query);
+          const tweets = await this.searchWithRetry(
+            query,
+            maxResultsPerQuery,
+            sinceId,
+          );
 
-      for (const batch of queryBatches) {
-        const batchPromises = batch.map((query) =>
-          this.searchWithRetry(query, maxResultsPerQuery),
-        );
-        const results = await Promise.allSettled(batchPromises);
+          if (tweets.length > 0) {
+            // Update sinceId to avoid duplicates in next run
+            this.sinceIds.set(query, tweets[0].id);
 
-        for (const result of results) {
-          if (result.status === 'fulfilled' && result.value) {
-            const tweets = result.value;
             for (const tweet of tweets) {
+              // Skip if already seen this tweet
+              if (seenTweetIds.has(tweet.id)) continue;
+              seenTweetIds.add(tweet.id);
+
               try {
+                // Quick filters first (fast failures)
                 if (this.isSpamOrInappropriate(tweet.text)) continue;
                 if (!this.isNigeriaRelated(tweet.text)) continue;
                 if (!this.isLikelyEvent(tweet.text)) continue;
 
                 const eventData = this.parseTweetToEvent(tweet);
                 if (eventData && this.isValidEventData(eventData)) {
-                  await this.eventsService.create(eventData);
-                  processedCount++;
+                  eventsToCreate.push(eventData);
                   this.logger.log(
-                    `Created event from tweet: ${eventData.title} (ID: ${tweet.id})`,
+                    `Queued event: ${eventData.title} (ID: ${tweet.id})`,
                   );
                 }
               } catch (error) {
-                this.logger.warn(`Failed to process tweet ${tweet.id}:`, error);
+                this.logger.warn(
+                  `Failed to process tweet ${tweet.id}:`,
+                  error instanceof Error ? error.message : error,
+                );
               }
             }
-          } else if (result.status === 'rejected') {
-            this.logger.error(`Failed batch query:`, result.reason);
           }
-        }
 
-        await this.delay(3000);
+          // Add delay between queries to respect rate limits
+          await this.delay(5000); // 5 seconds between queries
+        } catch (error) {
+          this.logger.error(
+            `Failed query: ${query}`,
+            error instanceof Error ? error.message : error,
+          );
+        }
       }
 
+      // Bulk create events for performance
+      if (eventsToCreate.length > 0) {
+        try {
+          await this.eventsService.createBulk(eventsToCreate);
+          processedCount = eventsToCreate.length;
+        } catch (error) {
+          this.logger.error(
+            'Failed to bulk create events:',
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
       this.logger.log(
-        `Processed ${processedCount} Nigerian tweets into events`,
+        `✅ Processed ${processedCount} events in ${duration}s`,
       );
     } catch (error: any) {
-      this.logger.error('Failed to fetch or process tweets:', error.message);
+      this.logger.error('Cron job failed:', error.message);
     }
   }
 
   private async searchWithRetry(
     query: string,
     maxResults: number,
-    retries = 1,
+    sinceId?: string,
+    retries = 3,
   ): Promise<any[]> {
     try {
-      const response = await this.twitterClient.v2.search(query, {
+      // Check rate limit BEFORE making request
+      const rateLimit = await this.rateLimitPlugin.v2.getRateLimit(
+        'tweets/search/recent',
+      );
+      
+      if (rateLimit && rateLimit.remaining === 0) {
+        const waitTime = rateLimit.reset * 1000 - Date.now() + 2000; // Add 2s buffer
+        if (waitTime > 0) {
+          this.logger.warn(
+            `⏳ Rate limit exhausted. Waiting ${Math.round(waitTime / 1000)}s...`,
+          );
+          await this.delay(waitTime);
+        }
+      }
+
+      // Make the search request
+      const searchParams: any = {
         max_results: maxResults,
         'tweet.fields': [
           'created_at',
@@ -319,101 +429,80 @@ export class XIntegrationService {
           'public_metrics',
         ],
         expansions: ['author_id'],
-        // start_time: new Date(
-        //   Date.now() - 7 * 24 * 60 * 60 * 1000,
-        // ).toISOString(),
-      });
+      };
+
+      // Add since_id to avoid duplicates
+      if (sinceId) {
+        searchParams.since_id = sinceId;
+      }
+
+      const response = await this.twitterClient.v2.search(query, searchParams);
+
+      // Log rate limit status
+      if (response.rateLimit) {
+        this.logger.log(
+          `Rate limit: ${response.rateLimit.remaining}/${response.rateLimit.limit} remaining`,
+        );
+      }
 
       return response.data?.data || [];
     } catch (error: any) {
-      if ((error.code === 429 || error.rateLimit) && retries > 0) {
+      if ((error.code === 429 || error.rateLimit?.remaining === 0) && retries > 0) {
+        // Calculate accurate wait time
+        let waitTime = 60000; // Default 60s
+        
+        try {
+          const rateLimit = await this.rateLimitPlugin.v2.getRateLimit(
+            'tweets/search/recent',
+          );
+          if (rateLimit) {
+            waitTime = Math.max(
+              rateLimit.reset * 1000 - Date.now() + 2000,
+              60000,
+            );
+          }
+        } catch {
+          // Use default wait time if we can't get rate limit info
+        }
+
         this.logger.warn(
-          `Rate limit hit for query "${query}", retrying after 60s...`,
+          `⚠️ Rate limit hit. Retrying after ${Math.round(waitTime / 1000)}s... (${retries} retries left)`,
         );
-        await this.delay(60000);
-        return this.searchWithRetry(query, maxResults, retries - 1);
+        
+        await this.delay(waitTime);
+        return this.searchWithRetry(query, maxResults, sinceId, retries - 1);
       }
-      throw error;
-    }
-  }
 
-  // @Cron(CronExpression.EVERY_HOUR)
-  // async postApprovedEvents() {
-  //   this.logger.log('Posting approved events to X...');
-  //   try {
-  //     const events: any = await this.eventsService.getEventsToPost();
-  //     let postedCount = 0;
-
-  //     const batchSize = 5;
-  //     for (let i = 0; i < events.length; i += batchSize) {
-  //       const batch = events.slice(i, i + batchSize);
-  //       const batchPromises = batch.map((event) =>
-  //         this.postEventWithRetry(event),
-  //       );
-  //       const results = await Promise.allSettled(batchPromises);
-
-  //       for (const result of results) {
-  //         if (result.status === 'fulfilled') {
-  //           postedCount++;
-  //         } else {
-  //           this.logger.error(`Failed to post event:`, result.reason);
-  //         }
-  //       }
-
-  //       await this.delay(5000);
-  //     }
-
-  //     this.logger.log(`Posted ${postedCount} events to X`);
-  //   } catch (error: any) {
-  //     this.logger.error('Failed to post events to X:', error.message);
-  //   }
-  // }
-
-  private async postEventWithRetry(event: any, retries = 1): Promise<void> {
-    try {
-      const tweetText = this.formatEventTweet(event);
-      const tweet = await this.readWriteClient.v2.tweet(tweetText);
-      await this.eventsService.markAsPostedToX(event._id as string);
-      this.logger.log(
-        `Posted event to X: ${event.title} (Tweet ID: ${tweet.data.id})`,
+      // Log error but don't throw - return empty array to continue
+      this.logger.error(
+        `Search failed: ${error.message || error}`,
       );
-    } catch (error: any) {
-      if ((error.code === 429 || error.rateLimit) && retries > 0) {
-        this.logger.warn(
-          `Rate limit hit for posting event ${event._id}, retrying after 60s...`,
-        );
-        await this.delay(60000);
-        return this.postEventWithRetry(event, retries - 1);
-      }
-      throw error;
+      return [];
     }
   }
 
   private isSpamOrInappropriate(text: string): boolean {
     const lowerText = text.toLowerCase();
+    
+    // Single regex test for performance
+    if (this.spamRegex.test(lowerText)) return true;
 
-    if (this.spamKeywords.some((keyword) => lowerText.includes(keyword))) {
-      return true;
-    }
-
-    if (this.suspiciousPatterns.some((pattern) => pattern.test(text))) {
-      return true;
-    }
-
+    // Additional checks
     const linkCount = (text.match(/https?:\/\/\S+/g) || []).length;
-    if (
-      linkCount > 2 ||
-      text === text.toUpperCase() ||
-      (text.match(/[!?.]{3,}/g) || []).length > 2
-    ) {
-      return true;
-    }
+    if (linkCount > 2) return true;
+    
+    if (text === text.toUpperCase() && text.length > 20) return true;
+    
+    const excessivePunctuation = (text.match(/[!?.]{3,}/g) || []).length;
+    if (excessivePunctuation > 2) return true;
 
     return false;
   }
 
   private isNigeriaRelated(text: string): boolean {
     const lowerText = text.toLowerCase();
+    
+    // Quick check for common keywords
     if (
       lowerText.includes('nigeria') ||
       lowerText.includes('nigerian') ||
@@ -421,44 +510,33 @@ export class XIntegrationService {
     ) {
       return true;
     }
-    return this.nigeriaLocations.some((location) =>
-      lowerText.includes(location),
+    
+    // Use pre-compiled regex for location check
+    return this.nigeriaLocationRegex.test(lowerText);
+  }
+
+  private isLikelyEvent(text: string): boolean {
+    const lowerText = text.toLowerCase();
+
+    // Must have strong event keyword
+    if (!this.strongKeywordRegex.test(lowerText)) return false;
+
+    // Must have date indicator
+    return (
+      this.dateIndicatorRegex.test(text) || this.nextDayRegex.test(lowerText)
     );
   }
 
-  private formatEventTweet(event: any): string {
-    const maxLength = 280;
-    const eventUrl = event.link ? `\n🔗 ${event.link}` : '';
-    const hashtags = '#NigeriaEvents #TechNigeria';
+  private isBadTitle(title: string): boolean {
+    const emojiCount = (title.match(this.emojiRegex) || []).length;
+    if (emojiCount > 2) return true;
 
-    let tweet = `🎉 Upcoming: ${event.title}\n`;
-    tweet += `📅 ${this.formatDate(event.date)}\n`;
-    tweet += `📍 ${event.location}\n`;
-
-    if (event.isFree) {
-      tweet += `💰 FREE!\n`;
-    } else {
-      tweet += `💰 Ticketed\n`;
-    }
-
-    const remainingSpace =
-      maxLength - tweet.length - eventUrl.length - hashtags.length - 10;
-    if (event.description && remainingSpace > 50) {
-      let truncatedDesc = event.description.substring(0, remainingSpace);
-      truncatedDesc =
-        truncatedDesc.substring(0, truncatedDesc.lastIndexOf(' ')) + '...';
-      tweet += `\n${truncatedDesc}\n`;
-    }
-
-    tweet += eventUrl + `\n${hashtags}`;
-
-    return tweet.substring(0, maxLength);
+    return this.badTitlePatterns.some((pattern) => pattern.test(title));
   }
 
   private parseTweetToEvent(tweet: any): CreateEventDto | null {
     try {
       const text = tweet.text;
-      const lowerText = text.toLowerCase();
 
       const date = this.extractDate(text, tweet.created_at);
       if (!date) return null;
@@ -498,76 +576,12 @@ export class XIntegrationService {
     }
   }
 
-  private isLikelyEvent(text: string): boolean {
-    const lowerText = text.toLowerCase();
-
-    const strongKeywords = [
-      'conference',
-      'summit',
-      'workshop',
-      'seminar',
-      'hackathon',
-      'meetup',
-      'tech event',
-      'startup event',
-      'developer conference',
-      'join us',
-      'register now',
-      'save the date',
-      'rsvp',
-      'tickets available',
-      'upcoming event',
-      'webinar',
-      'panel discussion',
-      'networking event',
-      'launch event',
-      'demo day',
-      'pitch night',
-      'google',
-    ];
-
-    const hasStrongKeyword = strongKeywords.some((keyword) =>
-      lowerText.includes(keyword),
-    );
-
-    const hasDateIndicator =
-      /\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/i.test(
-        text,
-      ) ||
-      /\b(next|this|upcoming)\s+(week|month|friday|saturday|sunday|monday|tuesday|wednesday|thursday)\b/i.test(
-        lowerText,
-      );
-
-    const hasTimeIndicator = /\b(\d{1,2}(:\d{2})?\s?(am|pm))\b/i.test(text);
-
-    return hasStrongKeyword && hasDateIndicator;
-  }
-
-  private isBadTitle(title: string): boolean {
-    const badPatterns = [
-      /^(dm|call|text|whatsapp|join|click|link)/i,
-      /available for/i,
-      /^@\w+/,
-      /^\d+$/,
-      /^(rt|retweet|repost)/i,
-      /^http/,
-      /emoji\s*only/i,
-    ];
-
-    const emojiCount = (title.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length;
-    if (emojiCount > 2) return true;
-
-    return badPatterns.some((pattern) => pattern.test(title));
-  }
-
   private extractTitle(text: string): string {
-    // Improved: remove URLs, mentions, hashtags, emojis
-    const emojiRegex = /[\u{1F000}-\u{1FFFF}]/gu;
     let cleanText = text
       .replace(/https?:\/\/\S+/g, '')
       .replace(/@\w+/g, '')
       .replace(/#\w+/g, '')
-      .replace(emojiRegex, '')
+      .replace(this.emojiRegex, '')
       .trim();
 
     const lines = cleanText
@@ -575,7 +589,6 @@ export class XIntegrationService {
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
 
-    // Prioritize lines with event keywords and proper capitalization
     const eventKeywords = [
       'event',
       'meetup',
@@ -584,6 +597,8 @@ export class XIntegrationService {
       'summit',
       'hackathon',
     ];
+
+    // Prioritize lines with event keywords
     for (const line of lines) {
       if (
         line.length > 15 &&
@@ -596,8 +611,9 @@ export class XIntegrationService {
       }
     }
 
+    // Fallback to first valid line
     for (const line of lines) {
-      if (line.length > 15 && !this.isBadTitle(line)) {
+      if (line.length > 15 && line.length < 120 && !this.isBadTitle(line)) {
         return this.capitalizeTitle(line);
       }
     }
@@ -613,46 +629,23 @@ export class XIntegrationService {
   }
 
   private cleanDescription(text: string): string {
-    const emojiRegex = /[\u{1F000}-\u{1FFFF}]/gu;
     let cleaned = text
       .replace(/https?:\/\/\S+/g, '')
       .replace(/@\w+/g, '')
-      .replace(emojiRegex, '');
+      .replace(this.emojiRegex, '');
     cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
     return cleaned.trim();
   }
 
   private extractDate(text: string, fallbackDate: string): Date | null {
-    const patterns = [
-      /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/,
-      /\b(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/,
-      /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})\b/i,
-      /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{4})\b/i,
-      /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i,
-      /\b(next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-    ];
+    const currentYear = new Date().getFullYear();
 
-    const monthMap: { [key: string]: number } = {
-      jan: 0,
-      feb: 1,
-      mar: 2,
-      apr: 3,
-      may: 4,
-      jun: 5,
-      jul: 6,
-      aug: 7,
-      sep: 8,
-      oct: 9,
-      nov: 10,
-      dec: 11,
-    };
-
-    for (const pattern of patterns) {
+    for (const pattern of this.datePatterns) {
       const match = text.match(pattern);
       if (match) {
         let parsedDate: Date;
-        const currentYear = new Date().getFullYear();
 
+        // Handle "next/this Monday" pattern
         if (pattern.source.includes('next|this')) {
           const offset = match[1].toLowerCase() === 'next' ? 7 : 0;
           const dayName = match[2].toLowerCase();
@@ -675,51 +668,49 @@ export class XIntegrationService {
           parsedDate.setHours(0, 0, 0, 0);
         } else {
           let day, month, year;
-          if (match[3] && match[3].length === 2) {
-            year = parseInt('20' + match[3], 10);
-          } else {
-            year = parseInt(match[3] || currentYear.toString(), 10);
-          }
 
-          if (pattern.source.includes('jan|feb')) {
-            if (isNaN(parseInt(match[1]))) {
-              month = monthMap[match[1].toLowerCase().slice(0, 3)];
-              day = parseInt(match[2], 10);
-            } else {
-              day = parseInt(match[1], 10);
-              month = monthMap[match[2].toLowerCase().slice(0, 3)];
-            }
+          // Handle different date formats
+          if (isNaN(parseInt(match[1]))) {
+            // Month name first
+            month = this.monthMap[match[1].toLowerCase().slice(0, 3)];
+            day = parseInt(match[2], 10);
+            year = match[3] ? parseInt(match[3], 10) : currentYear;
+          } else if (match[1].length === 4) {
+            // Year first (ISO format)
+            year = parseInt(match[1], 10);
+            month = parseInt(match[2], 10) - 1;
+            day = parseInt(match[3], 10);
           } else {
+            // Day/month format
             if (parseInt(match[1], 10) > 12) {
               day = parseInt(match[1], 10);
               month = parseInt(match[2], 10) - 1;
-              year = parseInt(match[3] || currentYear.toString(), 10);
             } else {
-              if (match[1].length === 4) {
-                year = parseInt(match[1], 10);
-                month = parseInt(match[2], 10) - 1;
-                day = parseInt(match[3], 10);
-              } else {
-                month = parseInt(match[1], 10) - 1;
-                day = parseInt(match[2], 10);
-                year = parseInt(match[3] || currentYear.toString(), 10);
-              }
+              month = parseInt(match[1], 10) - 1;
+              day = parseInt(match[2], 10);
+            }
+            year = match[3] ? parseInt(match[3], 10) : currentYear;
+            
+            // Handle 2-digit years
+            if (year < 100) {
+              year += 2000;
             }
           }
 
           parsedDate = new Date(year, month, day);
         }
 
+        // Validate parsed date is in the future (or recent past for fallback)
         if (
           !isNaN(parsedDate.getTime()) &&
           parsedDate > new Date(Date.now() - 24 * 60 * 60 * 1000)
         ) {
-          // Allow recent but focus on future
           return parsedDate;
         }
       }
     }
 
+    // Fallback: assume event is 7 days from tweet creation
     const fallback = new Date(
       new Date(fallbackDate).getTime() + 7 * 24 * 60 * 60 * 1000,
     );
@@ -727,13 +718,7 @@ export class XIntegrationService {
   }
 
   private extractTime(text: string): string | null {
-    const timePatterns = [
-      /\b(\d{1,2}):(\d{2})\s?(am|pm|a\.m\.|p\.m\.)/i,
-      /\b(\d{1,2})\s?(am|pm|a\.m\.|p\.m\.)/i,
-      /\b(\d{1,2}):(\d{2})\b/,
-    ];
-
-    for (const pattern of timePatterns) {
+    for (const pattern of this.timePatterns) {
       const match = text.match(pattern);
       if (match) {
         let hours = parseInt(match[1], 10);
@@ -746,9 +731,7 @@ export class XIntegrationService {
           hours = 0;
         }
 
-        return `${hours.toString().padStart(2, '0')}:${minutes
-          .toString()
-          .padStart(2, '0')}`;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
       }
     }
 
@@ -758,6 +741,7 @@ export class XIntegrationService {
   private extractLocation(text: string): string | null {
     const lowerText = text.toLowerCase();
 
+    // Check against known Nigeria locations (sorted by length for accurate matching)
     for (const location of this.nigeriaLocations.sort(
       (a, b) => b.length - a.length,
     )) {
@@ -769,6 +753,7 @@ export class XIntegrationService {
       }
     }
 
+    // Try to extract location from patterns
     const locationPatterns = [
       /(?:at|in|venue:|location:|held at|join us at)\s+([A-Z][a-zA-Z\s,]+(?:Nigeria)?)/i,
       /📍\s*([A-Z][a-zA-Z\s,]+(?:Nigeria)?)/,
@@ -777,8 +762,8 @@ export class XIntegrationService {
 
     for (const pattern of locationPatterns) {
       const match = text.match(pattern);
-      if (match && match[1]) {
-        const location = match[1].trim().replace(/,$/, '');
+      if (match) {
+        const location = (match[2] || match[1]).trim().replace(/,$/, '');
         if (this.isNigeriaRelated(location)) {
           return location;
         }
@@ -920,23 +905,47 @@ export class XIntegrationService {
       'purchase',
       'fee',
       'paid',
+      '
       'register and pay',
       'entrance fee',
+      'cost',
+      'price',
     ];
     const lowerText = text.toLowerCase();
 
-    if (paidKeywords.some((keyword) => lowerText.includes(keyword)))
+    // If explicitly paid, return false
+    if (paidKeywords.some((keyword) => lowerText.includes(keyword))) {
       return false;
+    }
+    
+    // If explicitly free, return true
     return freeKeywords.some((keyword) => lowerText.includes(keyword));
   }
 
   private isValidEventData(eventData: CreateEventDto): boolean {
-    if (!eventData.title || eventData.title.length < 15) return false;
-    if (!eventData.description || eventData.description.length < 50)
+    if (!eventData.title || eventData.title.length < 15) {
+      this.logger.debug('Invalid: title too short');
       return false;
-    if (!eventData.location) return false;
-    if (new Date(eventData.date) < new Date(Date.now() - 24 * 60 * 60 * 1000))
+    }
+    
+    if (!eventData.description || eventData.description.length < 50) {
+      this.logger.debug('Invalid: description too short');
       return false;
+    }
+    
+    if (!eventData.location) {
+      this.logger.debug('Invalid: no location');
+      return false;
+    }
+    
+    const eventDate = new Date(eventData.date);
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    if (eventDate < dayAgo) {
+      this.logger.debug('Invalid: date in past');
+      return false;
+    }
+    
     return true;
   }
 
@@ -952,7 +961,114 @@ export class XIntegrationService {
     });
   }
 
+  private formatEventTweet(event: any): string {
+    const maxLength = 280;
+    const eventUrl = event.link ? `\n🔗 ${event.link}` : '';
+    const hashtags = '\n#NigeriaEvents #TechNigeria';
+
+    let tweet = `🎉 Upcoming: ${event.title}\n`;
+    tweet += `📅 ${this.formatDate(event.date)}\n`;
+    tweet += `📍 ${event.location}\n`;
+
+    if (event.isFree) {
+      tweet += `💰 FREE!\n`;
+    } else {
+      tweet += `💰 Ticketed\n`;
+    }
+
+    const remainingSpace =
+      maxLength - tweet.length - eventUrl.length - hashtags.length - 5;
+      
+    if (event.description && remainingSpace > 50) {
+      let truncatedDesc = event.description.substring(0, remainingSpace);
+      const lastSpace = truncatedDesc.lastIndexOf(' ');
+      if (lastSpace > 0) {
+        truncatedDesc = truncatedDesc.substring(0, lastSpace) + '...';
+      }
+      tweet += `\n${truncatedDesc}`;
+    }
+
+    tweet += eventUrl + hashtags;
+
+    return tweet.substring(0, maxLength);
+  }
+
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Optional: Post approved events to X (uncomment if needed)
+  // @Cron('0 */3 * * *', { // Every 3 hours
+  //   timeZone: 'Africa/Lagos',
+  // })
+  // async postApprovedEvents() {
+  //   this.logger.log('Posting approved events to X...');
+  //   try {
+  //     const events: any = await this.eventsService.getEventsToPost();
+  //     
+  //     if (events.length === 0) {
+  //       this.logger.log('No events to post');
+  //       return;
+  //     }
+  //
+  //     let postedCount = 0;
+  //     const batchSize = 3; // Smaller batches to avoid rate limits
+  //
+  //     for (let i = 0; i < events.length; i += batchSize) {
+  //       const batch = events.slice(i, i + batchSize);
+  //       
+  //       for (const event of batch) {
+  //         try {
+  //           await this.postEventWithRetry(event);
+  //           postedCount++;
+  //           
+  //           // Add delay between posts
+  //           await this.delay(10000); // 10 seconds between posts
+  //         } catch (error) {
+  //           this.logger.error(
+  //             `Failed to post event ${event._id}:`,
+  //             error instanceof Error ? error.message : error,
+  //           );
+  //         }
+  //       }
+  //
+  //       // Delay between batches
+  //       if (i + batchSize < events.length) {
+  //         await this.delay(30000); // 30 seconds between batches
+  //       }
+  //     }
+  //
+  //     this.logger.log(`✅ Posted ${postedCount}/${events.length} events to X`);
+  //   } catch (error: any) {
+  //     this.logger.error('Failed to post events to X:', error.message);
+  //   }
+  // }
+
+  private async postEventWithRetry(event: any, retries = 3): Promise<void> {
+    try {
+      const tweetText = this.formatEventTweet(event);
+      const tweet = await this.readWriteClient.v2.tweet(tweetText);
+      
+      await this.eventsService.markAsPostedToX(event._id as string);
+      
+      this.logger.log(
+        `✅ Posted event: ${event.title} (Tweet ID: ${tweet.data.id})`,
+      );
+    } catch (error: any) {
+      if ((error.code === 429 || error.rateLimit?.remaining === 0) && retries > 0) {
+        const waitTime = error.rateLimit?.reset 
+          ? (error.rateLimit.reset * 1000 - Date.now() + 2000)
+          : 60000;
+          
+        this.logger.warn(
+          `⚠️ Rate limit hit. Retrying after ${Math.round(waitTime / 1000)}s... (${retries} retries left)`,
+        );
+        
+        await this.delay(waitTime);
+        return this.postEventWithRetry(event, retries - 1);
+      }
+      
+      throw error;
+    }
   }
 }
