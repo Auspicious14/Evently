@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -14,6 +15,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class EventsService {
+  private readonly logger = new Logger(EventsService.name);
+
   constructor(
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private readonly cloudinaryService: CloudinaryService,
@@ -64,15 +67,265 @@ export class EventsService {
 
     // Track activity
     if (userId) {
-      await this.dashboardService.trackActivity(userId, 'event_create', data._id.toString(), {
-        category: data.category,
-        location: data.location,
-      });
+      await this.dashboardService.trackActivity(
+        userId,
+        'event_create',
+        data._id.toString(),
+        {
+          category: data.category,
+          location: data.location,
+        },
+      );
     }
 
     await this.notificationsService.sendEventCreationNotification(data);
 
     return { success: true, data: data.toObject() };
+  }
+
+  /**
+   * Bulk create events (optimized for Twitter/X integration)
+   * Handles duplicates, validation, and batch operations efficiently
+   */
+  async createBulk(
+    createEventDtos: CreateEventDto[],
+    userId?: string,
+  ): Promise<{
+    success: boolean;
+    data: Event[];
+    stats: {
+      total: number;
+      created: number;
+      duplicates: number;
+      failed: number;
+    };
+  }> {
+    this.logger.log(`Starting bulk create for ${createEventDtos.length} events`);
+
+    const stats = {
+      total: createEventDtos.length,
+      created: 0,
+      duplicates: 0,
+      failed: 0,
+    };
+
+    const createdEvents: Event[] = [];
+    const eventsToInsert: any[] = [];
+
+    // Step 1: Check for duplicates in batch
+    const tweetIds = createEventDtos
+      .filter((dto) => dto.sourceTweetId)
+      .map((dto) => dto.sourceTweetId);
+
+    const existingEvents = tweetIds.length > 0
+      ? await this.eventModel
+          .find({ sourceTweetId: { $in: tweetIds } })
+          .select('sourceTweetId')
+          .lean()
+          .exec()
+      : [];
+
+    const existingTweetIds = new Set(
+      existingEvents.map((e: any) => e.sourceTweetId),
+    );
+
+    // Step 2: Process each event
+    for (const createEventDto of createEventDtos) {
+      try {
+        // Check for duplicates
+        if (
+          createEventDto.sourceTweetId &&
+          existingTweetIds.has(createEventDto.sourceTweetId)
+        ) {
+          stats.duplicates++;
+          this.logger.debug(
+            `Duplicate event skipped: ${createEventDto.sourceTweetId}`,
+          );
+          continue;
+        }
+
+        // Geocode location
+        const coordinates = this.geocodeLocation(createEventDto.location);
+
+        // Prepare event data
+        const eventData = {
+          ...createEventDto,
+          imageUrls: [],
+          submitterId: userId ? new Types.ObjectId(userId) : undefined,
+          source: createEventDto.sourceType || 'x',
+          status: createEventDto.status || 'pending',
+          eventType: createEventDto.eventType || 'online',
+          isFree: createEventDto.isFree ?? false,
+          coordinates: coordinates
+            ? {
+                type: 'Point',
+                coordinates: coordinates,
+              }
+            : undefined,
+          views: 0,
+          upvotes: 0,
+          flags: 0,
+          upvotedBy: [],
+          postedToX: createEventDto.postedToX ?? false,
+          postedToXAt: createEventDto.postedToX ? new Date() : undefined,
+        };
+
+        eventsToInsert.push(eventData);
+      } catch (error) {
+        stats.failed++;
+        this.logger.warn(
+          `Failed to prepare event: ${createEventDto.title}`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    // Step 3: Bulk insert if we have events
+    if (eventsToInsert.length > 0) {
+      try {
+        const insertedEvents = await this.eventModel.insertMany(
+          eventsToInsert,
+          {
+            ordered: false, // Continue on error
+            lean: true,
+          },
+        );
+
+        createdEvents.push(...insertedEvents);
+        stats.created = insertedEvents.length;
+
+        this.logger.log(
+          `✅ Bulk created ${stats.created} events successfully`,
+        );
+
+        // Step 4: Track activities in background (non-blocking)
+        if (userId) {
+          this.trackBulkActivities(userId, insertedEvents).catch((error) =>
+            this.logger.error('Failed to track bulk activities:', error),
+          );
+        }
+
+        // Step 5: Send notifications in background (non-blocking)
+        this.sendBulkNotifications(insertedEvents).catch((error) =>
+          this.logger.error('Failed to send bulk notifications:', error),
+        );
+      } catch (error: any) {
+        // Handle partial success in insertMany
+        if (error.writeErrors) {
+          stats.created = error.insertedDocs?.length || 0;
+          stats.failed += error.writeErrors.length;
+          createdEvents.push(...(error.insertedDocs || []));
+
+          this.logger.warn(
+            `Partial bulk insert: ${stats.created} created, ${stats.failed} failed`,
+          );
+        } else {
+          this.logger.error('Bulk insert failed completely:', error.message);
+          throw error;
+        }
+      }
+    }
+
+    this.logger.log(
+      `Bulk create completed: ${stats.created} created, ${stats.duplicates} duplicates, ${stats.failed} failed`,
+    );
+
+    return {
+      success: true,
+      data: createdEvents,
+      stats,
+    };
+  }
+
+  /**
+   * Track activities for bulk created events (non-blocking)
+   */
+  private async trackBulkActivities(
+    userId: string,
+    events: any[],
+  ): Promise<void> {
+    const activities = events.map((event) => ({
+      userId,
+      action: 'event_create',
+      eventId: event._id.toString(),
+      metadata: {
+        category: event.category,
+        location: event.location,
+        source: 'bulk_import',
+      },
+    }));
+
+    // Track in batches to avoid overwhelming the system
+    const batchSize = 50;
+    for (let i = 0; i < activities.length; i += batchSize) {
+      const batch = activities.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map((activity) =>
+          this.dashboardService.trackActivity(
+            activity.userId,
+            activity.action as any,
+            activity.eventId,
+            activity.metadata,
+          ),
+        ),
+      ).catch((error) =>
+        this.logger.warn('Failed to track activity batch:', error),
+      );
+    }
+  }
+
+  /**
+   * Send notifications for bulk created events (non-blocking)
+   */
+  private async sendBulkNotifications(events: any[]): Promise<void> {
+    // Send notifications in batches to avoid rate limits
+    const batchSize = 10;
+    for (let i = 0; i < events.length; i += batchSize) {
+      const batch = events.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map((event) =>
+          this.notificationsService
+            .sendEventCreationNotification(event)
+            .catch((error) =>
+              this.logger.warn(
+                `Failed to send notification for event ${event._id}:`,
+                error,
+              ),
+            ),
+        ),
+      );
+
+      // Small delay between batches
+      if (i + batchSize < events.length) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  /**
+   * Check if events already exist by tweet IDs
+   */
+  async checkDuplicates(
+    tweetIds: string[],
+  ): Promise<{ exists: string[]; new: string[] }> {
+    if (tweetIds.length === 0) {
+      return { exists: [], new: tweetIds };
+    }
+
+    const existingEvents = await this.eventModel
+      .find({ sourceTweetId: { $in: tweetIds } })
+      .select('sourceTweetId')
+      .lean()
+      .exec();
+
+    const existingTweetIds = new Set(
+      existingEvents.map((e: any) => e.sourceTweetId),
+    );
+
+    return {
+      exists: Array.from(existingTweetIds),
+      new: tweetIds.filter((id) => !existingTweetIds.has(id)),
+    };
   }
 
   async findAll(
@@ -172,12 +425,13 @@ export class EventsService {
     return { success: true, data: events, total };
   }
 
-  async findOne(id: string, userId?: string): Promise<{ success: true; data: Event }> {
-    const event = await this.eventModel.findByIdAndUpdate(
-      id,
-      { $inc: { views: 1 } },
-      { new: true },
-    ).exec();
+  async findOne(
+    id: string,
+    userId?: string,
+  ): Promise<{ success: true; data: Event }> {
+    const event = await this.eventModel
+      .findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true })
+      .exec();
 
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
@@ -192,7 +446,7 @@ export class EventsService {
     const eventData: any = event.toObject();
     if (userId) {
       eventData.hasUpvoted = event.upvotedBy.some(
-        (uid) => uid.toString() === userId
+        (uid) => uid.toString() === userId,
       );
     }
 
@@ -208,13 +462,14 @@ export class EventsService {
 
     const query: Record<string, any> = {
       _id: { $ne: id },
+      status: 'approved', // Only show approved similar events
       $or: [
         { category: event.category },
         { location: event.location },
         {
           date: {
-            $gte: new Date(event.date.getTime() - 7 * 24 * 60 * 60 * 1000), // within 7 days before
-            $lte: new Date(event.date.getTime() + 7 * 24 * 60 * 60 * 1000), // within 7 days after
+            $gte: new Date(event.date.getTime() - 7 * 24 * 60 * 60 * 1000),
+            $lte: new Date(event.date.getTime() + 7 * 24 * 60 * 60 * 1000),
           },
         },
       ],
@@ -234,9 +489,12 @@ export class EventsService {
     return { success: true, data: similarEvents };
   }
 
-  async upvote(id: string, userId: string): Promise<{ success: true; data: Event; message?: string }> {
+  async upvote(
+    id: string,
+    userId: string,
+  ): Promise<{ success: true; data: Event; message?: string }> {
     const event = await this.eventModel.findById(id);
-    
+
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
@@ -244,7 +502,7 @@ export class EventsService {
     const userObjectId = new Types.ObjectId(userId);
 
     const hasUpvoted = event.upvotedBy.some(
-      (uid) => uid.toString() === userId
+      (uid) => uid.toString() === userId,
     );
 
     if (hasUpvoted) {
@@ -260,22 +518,25 @@ export class EventsService {
 
     await this.notificationsService.sendUpvoteNotification(event, userId);
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       data: event,
-      message: 'Event upvoted successfully'
+      message: 'Event upvoted successfully',
     };
   }
 
-  async removeUpvote(id: string, userId: string): Promise<{ success: true; data: Event }> {
+  async removeUpvote(
+    id: string,
+    userId: string,
+  ): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findById(id);
-    
+
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
 
     const hasUpvoted = event.upvotedBy.some(
-      (uid) => uid.toString() === userId
+      (uid) => uid.toString() === userId,
     );
 
     if (!hasUpvoted) {
@@ -285,14 +546,17 @@ export class EventsService {
     // Remove upvote
     event.upvotes = Math.max(0, event.upvotes - 1);
     event.upvotedBy = event.upvotedBy.filter(
-      (uid) => uid.toString() !== userId
+      (uid) => uid.toString() !== userId,
     );
     await event.save();
 
     return { success: true, data: event };
   }
 
-  async flag(id: string, userId: string): Promise<{ success: true; data: Event }> {
+  async flag(
+    id: string,
+    userId: string,
+  ): Promise<{ success: true; data: Event }> {
     const event = await this.eventModel.findByIdAndUpdate(
       id,
       { $inc: { flags: 1 } },
@@ -350,16 +614,67 @@ export class EventsService {
     return { success: true, data: event };
   }
 
-  // Helper method for getting events to post to X
-  async getEventsToPost(): Promise<Event[]> {
+  /**
+   * Get events ready to be posted to X/Twitter
+   */
+  async getEventsToPost(limit: number = 10): Promise<Event[]> {
     return this.eventModel
       .find({
         status: 'approved',
         postedToX: false,
+        date: { $gte: new Date() }, // Only future events
       })
-      .sort({ date: 1 })
-      .limit(10)
+      .sort({ date: 1, upvotes: -1 }) // Prioritize sooner events and popular ones
+      .limit(limit)
       .exec();
+  }
+
+  /**
+   * Get bulk statistics for imported events
+   */
+  async getBulkImportStats(
+    dateFrom?: Date,
+    dateTo?: Date,
+  ): Promise<{
+    total: number;
+    byStatus: Record<string, number>;
+    byCategory: Record<string, number>;
+    bySource: Record<string, number>;
+  }> {
+    const matchQuery: any = { source: 'x' };
+
+    if (dateFrom || dateTo) {
+      matchQuery.createdAt = {};
+      if (dateFrom) matchQuery.createdAt.$gte = dateFrom;
+      if (dateTo) matchQuery.createdAt.$lte = dateTo;
+    }
+
+    const [total, byStatus, byCategory, bySource] = await Promise.all([
+      this.eventModel.countDocuments(matchQuery),
+      this.eventModel.aggregate([
+        { $match: matchQuery },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      this.eventModel.aggregate([
+        { $match: matchQuery },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+      ]),
+      this.eventModel.aggregate([
+        { $match: matchQuery },
+        { $group: { _id: '$source', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    return {
+      total,
+      byStatus: Object.fromEntries(
+        byStatus.map((s: any) => [s._id, s.count]),
+      ),
+      byCategory: Object.fromEntries(
+        byCategory.map((c: any) => [c._id, c.count]),
+      ),
+      bySource: Object.fromEntries(bySource.map((s: any) => [s._id, s.count])),
+    };
   }
 
   private geocodeLocation(location: string): [number, number] | null {
@@ -379,6 +694,13 @@ export class EventsService {
       Warri: [5.75, 5.5167],
       Calabar: [8.3417, 4.9517],
       Uyo: [7.9333, 5.0333],
+      Owerri: [7.0333, 5.4833],
+      Abeokuta: [3.35, 7.15],
+      Akure: [5.195, 7.25],
+      Maiduguri: [13.09, 11.85],
+      Zaria: [7.7, 11.05],
+      Sokoto: [5.25, 13.05],
+      Bauchi: [9.8333, 10.3167],
     };
 
     const locationLower = location.toLowerCase();
