@@ -75,6 +75,24 @@ export class EventsService {
     return { success: true, data: data.toObject() };
   }
 
+  async createBulk(
+    createEventDtos: CreateEventDto[],
+    userId?: string,
+  ): Promise<{ success: boolean; data: Partial<Event>[] }> {
+    const eventsData = createEventDtos.map(dto => ({
+      ...dto,
+      submitterId: userId ? new Types.ObjectId(userId) : undefined,
+      source: dto.sourceType || (userId ? 'manual' : 'x'),
+      status: dto.status || 'pending',
+      eventType: dto.eventType || 'online',
+      isFree: dto.isFree,
+      coordinates: this.geocodeLocation(dto.location) ? { type: 'Point', coordinates: this.geocodeLocation(dto.location) } : undefined,
+    }));
+    const createdEvents = await this.eventModel.insertMany(eventsData);
+    // Add tracking and notifications as needed
+    return { success: true, data: createdEvents };
+  }
+
   async findAll(
     filterEventDto: Partial<FilterEventDto>,
     user?: any,
