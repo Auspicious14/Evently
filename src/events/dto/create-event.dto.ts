@@ -63,4 +63,12 @@ export class CreateEventDto {
   @IsBoolean()
   @IsOptional()
   postedToX?: boolean;
+
+  @IsUrl({}, { each: true })
+  @IsOptional()
+  imageUrls?: string[];
+
+  @IsUrl()
+  @IsOptional()
+  twitterUrl?: string;
 }

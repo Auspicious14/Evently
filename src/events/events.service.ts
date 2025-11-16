@@ -38,7 +38,7 @@ export class EventsService {
       }
     }
 
-    const imageUrls = images
+    const uploadedImageUrls = images
       ? await Promise.all(
           images.map((image) => this.cloudinaryService.uploadImage(image)),
         )
@@ -48,7 +48,7 @@ export class EventsService {
 
     const eventData = {
       ...createEventDto,
-      imageUrls,
+      imageUrls: [...(createEventDto.imageUrls || []), ...uploadedImageUrls],
       submitterId: userId ? new Types.ObjectId(userId) : undefined,
       source: createEventDto.sourceType || (userId ? 'manual' : 'x'),
       status: createEventDto.status || 'pending',
@@ -83,24 +83,6 @@ export class EventsService {
     return { success: true, data: data.toObject() };
   }
 
-<<<<<<< HEAD
-  async createBulk(
-    createEventDtos: CreateEventDto[],
-    userId?: string,
-  ): Promise<{ success: boolean; data: Partial<Event>[] }> {
-    const eventsData = createEventDtos.map(dto => ({
-      ...dto,
-      submitterId: userId ? new Types.ObjectId(userId) : undefined,
-      source: dto.sourceType || (userId ? 'manual' : 'x'),
-      status: dto.status || 'pending',
-      eventType: dto.eventType || 'online',
-      isFree: dto.isFree,
-      coordinates: this.geocodeLocation(dto.location) ? { type: 'Point', coordinates: this.geocodeLocation(dto.location) } : undefined,
-    }));
-    const createdEvents = await this.eventModel.insertMany(eventsData);
-    // Add tracking and notifications as needed
-    return { success: true, data: createdEvents };
-=======
   /**
    * Bulk create events (optimized for Twitter/X integration)
    * Handles duplicates, validation, and batch operations efficiently
@@ -118,7 +100,9 @@ export class EventsService {
       failed: number;
     };
   }> {
-    this.logger.log(`Starting bulk create for ${createEventDtos.length} events`);
+    this.logger.log(
+      `Starting bulk create for ${createEventDtos.length} events`,
+    );
 
     const stats = {
       total: createEventDtos.length,
@@ -135,13 +119,14 @@ export class EventsService {
       .filter((dto) => dto.sourceTweetId)
       .map((dto) => dto.sourceTweetId);
 
-    const existingEvents = tweetIds.length > 0
-      ? await this.eventModel
-          .find({ sourceTweetId: { $in: tweetIds } })
-          .select('sourceTweetId')
-          .lean()
-          .exec()
-      : [];
+    const existingEvents =
+      tweetIds.length > 0
+        ? await this.eventModel
+            .find({ sourceTweetId: { $in: tweetIds } })
+            .select('sourceTweetId')
+            .lean()
+            .exec()
+        : [];
 
     const existingTweetIds = new Set(
       existingEvents.map((e: any) => e.sourceTweetId),
@@ -168,7 +153,7 @@ export class EventsService {
         // Prepare event data
         const eventData = {
           ...createEventDto,
-          imageUrls: [],
+          imageUrls: createEventDto.imageUrls || [],
           submitterId: userId ? new Types.ObjectId(userId) : undefined,
           source: createEventDto.sourceType || 'x',
           status: createEventDto.status || 'pending',
@@ -212,9 +197,7 @@ export class EventsService {
         createdEvents.push(...insertedEvents);
         stats.created = insertedEvents.length;
 
-        this.logger.log(
-          `✅ Bulk created ${stats.created} events successfully`,
-        );
+        this.logger.log(`✅ Bulk created ${stats.created} events successfully`);
 
         // Step 4: Track activities in background (non-blocking)
         if (userId) {
@@ -344,7 +327,6 @@ export class EventsService {
       exists: Array.from(existingTweetIds),
       new: tweetIds.filter((id) => !existingTweetIds.has(id)),
     };
->>>>>>> 746ff1c7696aaa5e386af71141f756f7976fbca6
   }
 
   async findAll(
@@ -520,9 +502,7 @@ export class EventsService {
 
     const userObjectId = new Types.ObjectId(userId);
 
-    const hasUpvoted = event.upvotedBy.some(
-      (uid) => uid.toString() === userId,
-    );
+    const hasUpvoted = event.upvotedBy.some((uid) => uid.toString() === userId);
 
     if (hasUpvoted) {
       throw new BadRequestException('You have already upvoted this event');
@@ -554,9 +534,7 @@ export class EventsService {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
 
-    const hasUpvoted = event.upvotedBy.some(
-      (uid) => uid.toString() === userId,
-    );
+    const hasUpvoted = event.upvotedBy.some((uid) => uid.toString() === userId);
 
     if (!hasUpvoted) {
       throw new BadRequestException('You have not upvoted this event');
@@ -686,9 +664,7 @@ export class EventsService {
 
     return {
       total,
-      byStatus: Object.fromEntries(
-        byStatus.map((s: any) => [s._id, s.count]),
-      ),
+      byStatus: Object.fromEntries(byStatus.map((s: any) => [s._id, s.count])),
       byCategory: Object.fromEntries(
         byCategory.map((c: any) => [c._id, c.count]),
       ),
@@ -720,6 +696,25 @@ export class EventsService {
       Zaria: [7.7, 11.05],
       Sokoto: [5.25, 13.05],
       Bauchi: [9.8333, 10.3167],
+      AdoEkiti: [7.6167, 5.2167],
+      Asaba: [6.8167, 6.7167],
+      Awka: [7.0667, 6.2167],
+      BirninKebbi: [12.4539, 4.1986],
+      Damaturu: [11.747, 11.966],
+      Dutse: [11.759, 9.345],
+      Gombe: [10.2833, 11.1667],
+      Gusau: [12.15, 6.6667],
+      Jalingo: [8.9, 11.3667],
+      Lafia: [8.4833, 8.5167],
+      Lokoja: [7.8024, 6.7383],
+      Makurdi: [7.7411, 8.5301],
+      Minna: [9.6167, 6.55],
+      Osogbo: [7.7667, 4.5667],
+      Oyo: [7.85, 3.9333],
+      Suleja: [9.2, 7.1667],
+      Umuahia: [5.5333, 7.4833],
+      Yenagoa: [4.9243, 6.2649],
+      Yola: [9.2167, 12.4833],
     };
 
     const locationLower = location.toLowerCase();

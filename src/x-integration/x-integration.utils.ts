@@ -1,17 +1,42 @@
 import { CreateEventDto } from '../events/dto/create-event.dto';
-import * as fs from 'fs';
-import * as path from 'path';
 
-// Load data files
-const nigeriaLocations = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'data/nigeria-locations.json'), 'utf8')
-);
-const spamKeywords = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'data/spam-keywords.json'), 'utf8')
-);
-const suspiciousPatterns = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'data/suspicious-patterns.json'), 'utf8')
-);
+// Nigeria locations data
+const nigeriaLocations = [
+  'lagos', 'abuja', 'port harcourt', 'kano', 'ibadan', 'benin city', 'kaduna', 'enugu', 'jos', 'ilorin',
+  'aba', 'onitsha', 'warri', 'calabar', 'abeokuta', 'akure', 'bauchi', 'maiduguri', 'zaria', 'ile-ife',
+  'owerri', 'uyo', 'sokoto', 'ogbomosho', 'ife', 'ikeja', 'victoria island', 'lekki', 'yaba', 'surulere',
+  'ikoyi', 'ajah', 'ogudu', 'maryland', 'garki', 'wuse', 'maitama', 'asokoro', 'trans amadi', 'gra',
+  'rivers state', 'lagos state', 'abia', 'adamawa', 'akwa ibom', 'anambra', 'bauchi state', 'bayelsa',
+  'benue', 'borno', 'cross river', 'delta', 'ebonyi', 'edo', 'ekiti', 'enugu state', 'gombe', 'imo',
+  'jigawa', 'kaduna state', 'kano state', 'katsina', 'kebbi', 'kogi', 'kwara', 'nasarawa', 'niger',
+  'ogun', 'ondo', 'osun', 'oyo', 'plateau', 'sokoto state', 'taraba', 'yobe', 'zamfara', 'fct'
+];
+
+// Spam keywords data
+const spamKeywords = [
+  'dm', 'dm me', 'direct message', 'pm me', 'message me', 'facetime', 'meetup dm', 'available for',
+  'escort', 'adult', 'hookup', 'dating', 'onlyfans', 'sugar daddy', 'sugar mummy', 'sugar baby',
+  'forex', 'bitcoin profit', 'crypto scam', 'get rich', 'make money fast', 'investment opportunity',
+  'double your money', 'casino', 'bet', 'trading signal', 'send money', 'wire transfer', 'paypal',
+  'cashapp', 'venmo', 'zelle', 'bank transfer', 'earn from home', 'passive income', 'mlm',
+  'pyramid scheme', 'nft', 'airdrop', 'free crypto', 'pump and dump', 'binary options', 'quick cash',
+  'side hustle', 'nude', 'porn', 'sex', 'xxx', '18+', 'nsfw', 'hook up', 'one night stand',
+  'casual encounter', 'massage service', 'body rub', 'erotic', 'sensual', 'escorts', 'call girl',
+  'prostitute', 'booty call', 'loan', 'quick loan', 'bad credit', 'no credit check',
+  'guaranteed approval', 'invest now', 'buy followers', 'increase likes', 'viral', 'hack account',
+  'recover account', 'password reset', 'free trial', 'subscription', 'cancel anytime',
+  'limited time offer', 'act now', 'urgent', 'exclusive deal', 'giveaway scam', 'fake news', 'clickbait'
+];
+
+// Suspicious patterns data
+const suspiciousPatterns = [
+  'dm\\s+(me|for|to|now|pls|please|quick|fast)',
+  'whatsapp\\s*(\\+?\\d{1,3})?[\\s-]*\\d{3}[\\s-]*\\d{3}[\\s-]*\\d{4}',
+  '\\$\\$\\$', '💰💰💰', '🔞', 'available\\s+for\\s+(facetime|meetup|hookups|calls|chats)',
+  'join\\s+my\\s+(group|channel|telegram|whatsapp)', 'click\\s+here', 'link\\s+in\\s+bio',
+  'bio\\s+link', '(earn|make|get|win)\\s+\\d{1,}[kK]?\\s+(daily|weekly|monthly)',
+  'free\\s+(gift|sample|trial|access)', 'call\\s+now', 'text\\s+me', 'urgent\\s+response'
+];
 
 // Pre-compiled regex patterns
 export const regexPatterns = {

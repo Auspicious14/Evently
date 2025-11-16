@@ -4,16 +4,16 @@ import {
   isSpamOrInappropriate,
   isNigeriaRelated,
   isLikelyEvent,
+  extractTitle,
+  cleanDescription,
   extractDate,
   extractTime,
   extractLocation,
-  extractTitle,
   determineCategory,
   checkIfFree,
-  cleanDescription,
-  isValidEventData,
   formatDate,
-  formatEventTweet
+  formatEventTweet,
+  isValidEventData,
 } from '../x-integration.utils';
 
 @Injectable()
@@ -56,7 +56,31 @@ export class TweetProcessorService {
       if (!title || title.length < 15) return null;
 
       const category = determineCategory(text);
-      const link = tweet.entities?.urls?.[0]?.expanded_url || null;
+      
+      // Extract URLs from tweet
+      const urls = tweet.entities?.urls || [];
+      let actualEventLink: string | null = null;
+      let twitterUrl: string = `https://x.com/${tweet.author_id || 'unknown'}/status/${tweet.id}`;
+      
+      // Find the first non-Twitter URL (actual event link)
+      for (const url of urls) {
+        if (!url.expanded_url.includes('twitter.com') && !url.expanded_url.includes('x.com')) {
+          actualEventLink = url.expanded_url;
+          break;
+        }
+      }
+      
+      // Extract image URLs if available
+      const imageUrls: string[] = [];
+      if (tweet.attachments?.media_keys) {
+        // If media keys are available, they would need to be resolved through Twitter API
+        // For now, we'll extract image URLs from the tweet text itself
+        const imageUrlMatches = text.match(/https?:\/\/[^\s]+\.(jpg|jpeg|png|gif)/gi);
+        if (imageUrlMatches) {
+          imageUrls.push(...imageUrlMatches);
+        }
+      }
+      
       const isFree = checkIfFree(text);
 
       const eventData: CreateEventDto = {
@@ -65,13 +89,19 @@ export class TweetProcessorService {
         date: date.toISOString(),
         location,
         category: category || 'Startup',
-        link,
+        link: actualEventLink,
         isFree,
         sourceType: 'x',
         sourceTweetId: tweet.id,
+        twitterUrl: twitterUrl,
         status: 'pending',
         postedToX: false,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       };
+
+      this.logger.log(
+        `Parsed tweet ${tweet.id}: title="${title}", link="${actualEventLink}", twitterUrl="${twitterUrl}", imageUrls=${imageUrls.length}`,
+      );
 
       // Validate the event data
       if (!isValidEventData(eventData)) {

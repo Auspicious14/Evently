@@ -38,6 +38,9 @@ export class Event {
   @Prop()
   sourceTweetId?: string;
 
+  @Prop()
+  twitterUrl?: string;
+
   @Prop({ default: 'pending', enum: ['pending', 'approved', 'rejected'] })
   status: string;
 

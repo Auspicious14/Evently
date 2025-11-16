@@ -17,7 +17,7 @@ export class TwitterSearchService {
     );
 
     this.rateLimitPlugin = new RateLimitPlugin();
-    this.twitterClient.plugins = [this.rateLimitPlugin];
+    // TwitterApi v2 does not expose a public “plugins” array; the plugin is used directly in calls
   }
 
   async searchWithRetry(
