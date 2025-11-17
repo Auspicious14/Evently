@@ -18,7 +18,7 @@ export class XIntegrationService {
     private readonly twitterPosting: TwitterPostingService,
   ) {}
 
-  @Cron(CronExpression.EVERY_10_MINUTES, {
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     timeZone: 'Africa/Lagos',
   })
   async handleCron() {
@@ -77,13 +77,13 @@ export class XIntegrationService {
     }
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
-  async postApprovedEvents() {
-    this.logger.log('Posting approved events to X...');
-    try {
-      await this.twitterPosting.postApprovedEvents();
-    } catch (error: any) {
-      this.logger.error('Failed to post events to X:', error.message);
-    }
-  }
+  // @Cron(CronExpression.EVERY_HOUR)
+  // async postApprovedEvents() {
+  //   this.logger.log('Posting approved events to X...');
+  //   try {
+  //     await this.twitterPosting.postApprovedEvents();
+  //   } catch (error: any) {
+  //     this.logger.error('Failed to post events to X:', error.message);
+  //   }
+  // }
 }
