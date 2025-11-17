@@ -50,5 +50,9 @@ export class FilterEventDto extends PaginationQueryDto {
   @IsBoolean()
   @IsOptional()
   isFree?: boolean;
+
+  @IsEnum(['upcoming', 'past', 'ongoing'])
+  @IsOptional()
+  eventStatus?: string;
 }
 

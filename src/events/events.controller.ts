@@ -113,4 +113,46 @@ create(
   markAsPostedToX(@Param('id') id: string) {
     return this.eventsService.markAsPostedToX(id);
   }
+
+  @Get('upcoming')
+  @UseGuards(JwtOptionalAuthGuard)
+  @UsePipes(new ValidationPipe({ 
+    transform: true, 
+    whitelist: true,
+    transformOptions: {
+      enableImplicitConversion: true
+    }
+  }))
+  getUpcomingEvents(@Query() paginationDto: any, @Request() req) {
+    const { limit = 20, skip = 0 } = paginationDto;
+    return this.eventsService.getUpcomingEvents(limit, skip, req.user);
+  }
+
+  @Get('past')
+  @UseGuards(JwtOptionalAuthGuard)
+  @UsePipes(new ValidationPipe({ 
+    transform: true, 
+    whitelist: true,
+    transformOptions: {
+      enableImplicitConversion: true
+    }
+  }))
+  getPastEvents(@Query() paginationDto: any, @Request() req) {
+    const { limit = 20, skip = 0 } = paginationDto;
+    return this.eventsService.getPastEvents(limit, skip, req.user);
+  }
+
+  @Get('ongoing')
+  @UseGuards(JwtOptionalAuthGuard)
+  @UsePipes(new ValidationPipe({ 
+    transform: true, 
+    whitelist: true,
+    transformOptions: {
+      enableImplicitConversion: true
+    }
+  }))
+  getOngoingEvents(@Query() paginationDto: any, @Request() req) {
+    const { limit = 20, skip = 0 } = paginationDto;
+    return this.eventsService.getOngoingEvents(limit, skip, req.user);
+  }
 }

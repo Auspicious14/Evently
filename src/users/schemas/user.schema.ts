@@ -9,7 +9,7 @@ export class User {
   xId?: string;
 
   @Prop({ unique: true, sparse: true })
-  email: string;
+  email?: string;
 
   @Prop({ required: true, unique: true })
   username: string;
@@ -25,6 +25,9 @@ export class User {
 
   @Prop()
   refreshToken: string;
+
+  @Prop()
+  profileImageUrl?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -18,7 +18,7 @@ export class XIntegrationService {
     private readonly twitterPosting: TwitterPostingService,
   ) {}
 
-  @Cron(CronExpression.EVERY_30_MINUTES, {
+  @Cron(CronExpression.EVERY_10_MINUTES, {
     timeZone: 'Africa/Lagos',
   })
   async handleCron() {
@@ -36,9 +36,9 @@ export class XIntegrationService {
             maxResultsPerQuery,
             sinceId,
           );
-          
+
           const eventsToCreate: CreateEventDto[] = [];
-          
+
           for (const tweet of tweets) {
             try {
               const eventData = this.tweetProcessor.parseTweetToEvent(tweet);
@@ -62,7 +62,6 @@ export class XIntegrationService {
           if (tweets.length > 0) {
             this.twitterSearch.setSinceId(query, tweets[0].id);
           }
-
         } catch (error) {
           this.logger.error(`Failed query: ${query}`, error);
         }

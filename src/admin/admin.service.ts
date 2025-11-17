@@ -56,8 +56,8 @@ export class AdminService {
       eventId: event._id.toString(),
       title: event.title,
       submitter: {
-        id: (event.submitterId as any)?._id?.toString(),
-        name: (event.submitterId as any)?.name || 'N/A',
+        id: (event.submitterId as any)?._id?.toString() || 'system',
+        name: (event.submitterId as any)?.name || 'system',
         avatar: (event.submitterId as any)?.avatar,
       },
       date: event.date,

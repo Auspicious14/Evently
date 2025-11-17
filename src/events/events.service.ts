@@ -345,6 +345,7 @@ export class EventsService {
       postedToX,
       eventType,
       isFree,
+      eventStatus,
     } = filterEventDto;
 
     const queryConditions: any = {};
@@ -367,6 +368,10 @@ export class EventsService {
 
     if (isFree !== undefined) {
       queryConditions.isFree = isFree;
+    }
+
+    if (eventStatus) {
+      queryConditions.eventStatus = eventStatus;
     }
 
     if (dateFrom || dateTo) {
@@ -624,6 +629,60 @@ export class EventsService {
       .sort({ date: 1, upvotes: -1 }) // Prioritize sooner events and popular ones
       .limit(limit)
       .exec();
+  }
+
+  /**
+   * Get upcoming events (events with eventStatus = 'upcoming')
+   */
+  async getUpcomingEvents(
+    limit: number = 20,
+    skip: number = 0,
+    user?: any,
+  ): Promise<{ success: boolean; data: Event[]; total: number }> {
+    return this.findAll(
+      {
+        eventStatus: 'upcoming',
+        limit,
+        skip,
+      },
+      user,
+    );
+  }
+
+  /**
+   * Get past events (events with eventStatus = 'past')
+   */
+  async getPastEvents(
+    limit: number = 20,
+    skip: number = 0,
+    user?: any,
+  ): Promise<{ success: boolean; data: Event[]; total: number }> {
+    return this.findAll(
+      {
+        eventStatus: 'past',
+        limit,
+        skip,
+      },
+      user,
+    );
+  }
+
+  /**
+   * Get ongoing events (events with eventStatus = 'ongoing')
+   */
+  async getOngoingEvents(
+    limit: number = 20,
+    skip: number = 0,
+    user?: any,
+  ): Promise<{ success: boolean; data: Event[]; total: number }> {
+    return this.findAll(
+      {
+        eventStatus: 'ongoing',
+        limit,
+        skip,
+      },
+      user,
+    );
   }
 
   /**
