@@ -1,20 +1,23 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Param, 
-  Patch, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
   Delete,
-  Query, 
-  UsePipes, 
-  ValidationPipe, 
-  UseGuards, 
+  Query,
+  UsePipes,
+  ValidationPipe,
+  UseGuards,
   Request,
   UseInterceptors,
-  UploadedFiles
+  UploadedFiles,
 } from '@nestjs/common';
-import { FilesInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
+import {
+  FilesInterceptor,
+  FileFieldsInterceptor,
+} from '@nestjs/platform-express';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventStatusDto } from './dto/update-event-status.dto';
@@ -28,40 +31,93 @@ import { JwtOptionalAuthGuard } from '../auth/guards/jwt-optional-auth.guard';
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
-  @UseGuards(JwtAuthGuard) 
+  @UseGuards(JwtAuthGuard)
   @Post()
   @UseInterceptors(FilesInterceptor('images', 10))
-  @UsePipes(new ValidationPipe({ 
-  transform: true,
-  transformOptions: {
-    enableImplicitConversion: true
-  }
-}))
-create(
-  @UploadedFiles() images: Express.Multer.File[],
-  @Body() createEventDto: CreateEventDto,
-  @Request() req,
-) {
-  console.log('RAW REQ.BODY:', req.body);
-  console.log('RAW REQ.FILES:', req.files);
-  console.log('IMAGES LENGTH:', images?.length);
-  console.log('FIRST FILE NAME:', images?.[0]?.originalname);
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  )
+  create(
+    @UploadedFiles() images: Express.Multer.File[],
+    @Body() createEventDto: CreateEventDto,
+    @Request() req,
+  ) {
+    console.log('RAW REQ.BODY:', req.body);
+    console.log('RAW REQ.FILES:', req.files);
+    console.log('IMAGES LENGTH:', images?.length);
+    console.log('FIRST FILE NAME:', images?.[0]?.originalname);
 
-  const userId = req.user.userId || req.user.sub;
-  return this.eventsService.create(createEventDto, userId, images);
-}
-  
+    const userId = req.user.userId || req.user.sub;
+    return this.eventsService.create(createEventDto, userId, images);
+  }
+
   @Get()
   @UseGuards(JwtOptionalAuthGuard)
-  @UsePipes(new ValidationPipe({ 
-    transform: true, 
-    whitelist: true,
-    transformOptions: {
-      enableImplicitConversion: true
-    }
-  }))
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  )
   findAll(@Query() filterEventDto: FilterEventDto, @Request() req) {
     return this.eventsService.findAll(filterEventDto, req.user);
+  }
+
+  // Specific routes MUST come before parameterized routes
+  @Get('upcoming')
+  @UseGuards(JwtOptionalAuthGuard)
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  )
+  getUpcomingEvents(@Query() paginationDto: any, @Request() req) {
+    const { limit = 20, skip = 0 } = paginationDto;
+    return this.eventsService.getUpcomingEvents(limit, skip, req.user);
+  }
+
+  @Get('past')
+  @UseGuards(JwtOptionalAuthGuard)
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  )
+  getPastEvents(@Query() paginationDto: any, @Request() req) {
+    const { limit = 20, skip = 0 } = paginationDto;
+    return this.eventsService.getPastEvents(limit, skip, req.user);
+  }
+
+  @Get('ongoing')
+  @UseGuards(JwtOptionalAuthGuard)
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  )
+  getOngoingEvents(@Query() paginationDto: any, @Request() req) {
+    const { limit = 20, skip = 0 } = paginationDto;
+    return this.eventsService.getOngoingEvents(limit, skip, req.user);
   }
 
   @Get(':id')
@@ -101,8 +157,8 @@ create(
   @Patch(':id/status')
   @UsePipes(new ValidationPipe())
   updateStatus(
-    @Param('id') id: string, 
-    @Body() updateEventStatusDto: UpdateEventStatusDto
+    @Param('id') id: string,
+    @Body() updateEventStatusDto: UpdateEventStatusDto,
   ) {
     return this.eventsService.updateStatus(id, updateEventStatusDto.status);
   }
@@ -112,47 +168,5 @@ create(
   @Patch(':id/post-to-x')
   markAsPostedToX(@Param('id') id: string) {
     return this.eventsService.markAsPostedToX(id);
-  }
-
-  @Get('upcoming')
-  @UseGuards(JwtOptionalAuthGuard)
-  @UsePipes(new ValidationPipe({ 
-    transform: true, 
-    whitelist: true,
-    transformOptions: {
-      enableImplicitConversion: true
-    }
-  }))
-  getUpcomingEvents(@Query() paginationDto: any, @Request() req) {
-    const { limit = 20, skip = 0 } = paginationDto;
-    return this.eventsService.getUpcomingEvents(limit, skip, req.user);
-  }
-
-  @Get('past')
-  @UseGuards(JwtOptionalAuthGuard)
-  @UsePipes(new ValidationPipe({ 
-    transform: true, 
-    whitelist: true,
-    transformOptions: {
-      enableImplicitConversion: true
-    }
-  }))
-  getPastEvents(@Query() paginationDto: any, @Request() req) {
-    const { limit = 20, skip = 0 } = paginationDto;
-    return this.eventsService.getPastEvents(limit, skip, req.user);
-  }
-
-  @Get('ongoing')
-  @UseGuards(JwtOptionalAuthGuard)
-  @UsePipes(new ValidationPipe({ 
-    transform: true, 
-    whitelist: true,
-    transformOptions: {
-      enableImplicitConversion: true
-    }
-  }))
-  getOngoingEvents(@Query() paginationDto: any, @Request() req) {
-    const { limit = 20, skip = 0 } = paginationDto;
-    return this.eventsService.getOngoingEvents(limit, skip, req.user);
   }
 }

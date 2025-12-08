@@ -12,12 +12,11 @@ export class TwitterSearchService {
   private sinceIds = new Map<string, string>();
 
   constructor(private readonly configService: ConfigService) {
+    this.rateLimitPlugin = new RateLimitPlugin();
     this.twitterClient = new TwitterApi(
       this.configService.get<string>('TWITTER_BEARER_TOKEN') as string,
+      { plugins: [this.rateLimitPlugin] },
     );
-
-    this.rateLimitPlugin = new RateLimitPlugin();
-    // TwitterApi v2 does not expose a public “plugins” array; the plugin is used directly in calls
   }
 
   async searchWithRetry(
@@ -27,19 +26,7 @@ export class TwitterSearchService {
     retries = 1,
   ): Promise<any[]> {
     try {
-      const response = await this.twitterClient.v2.search(query, {
-        max_results: maxResults,
-        'tweet.fields': [
-          'created_at',
-          'text',
-          'entities',
-          'author_id',
-          'public_metrics',
-        ],
-        expansions: ['author_id'],
-      });
-
-      // Check rate limit before search
+      // Check rate limit BEFORE making the API call
       const rateLimit = await this.rateLimitPlugin.v2.getRateLimit(
         'tweets/search/recent',
       );
@@ -52,6 +39,18 @@ export class TwitterSearchService {
           await delay(waitTime);
         }
       }
+
+      const response = await this.twitterClient.v2.search(query, {
+        max_results: maxResults,
+        'tweet.fields': [
+          'created_at',
+          'text',
+          'entities',
+          'author_id',
+          'public_metrics',
+        ],
+        expansions: ['author_id'],
+      });
 
       return response.data?.data || [];
     } catch (error: any) {
