@@ -41,7 +41,9 @@ export class XIntegrationService {
 
           for (const tweet of tweets) {
             try {
-              const eventData = this.tweetProcessor.parseTweetToEvent(tweet);
+              const eventData = await this.tweetProcessor.parseTweetToEvent(
+                tweet,
+              );
               if (eventData) {
                 eventsToCreate.push(eventData);
                 this.logger.log(

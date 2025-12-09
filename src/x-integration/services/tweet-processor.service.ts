@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { CreateEventDto } from '../../events/dto/create-event.dto';
 import {
   isSpamOrInappropriate,
@@ -19,8 +21,24 @@ import {
 @Injectable()
 export class TweetProcessorService {
   private readonly logger = new Logger(TweetProcessorService.name);
+  private genAI: GoogleGenerativeAI;
+  private model: any;
 
-  parseTweetToEvent(tweet: any): CreateEventDto | null {
+  constructor(private configService: ConfigService) {
+    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+    if (apiKey) {
+      this.genAI = new GoogleGenerativeAI(apiKey);
+      this.model = this.genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash-lite',
+      });
+    } else {
+      this.logger.warn(
+        'GEMINI_API_KEY not found in environment variables. AI categorization will be disabled.',
+      );
+    }
+  }
+
+  async parseTweetToEvent(tweet: any): Promise<CreateEventDto | null> {
     try {
       const text = tweet.text;
       const lowerText = text.toLowerCase();
@@ -55,32 +73,39 @@ export class TweetProcessorService {
       const title = extractTitle(text);
       if (!title || title.length < 15) return null;
 
-      const category = determineCategory(text);
-      
+      const category = await this.determineCategoryWithGemini(text);
+
       // Extract URLs from tweet
       const urls = tweet.entities?.urls || [];
       let actualEventLink: string | null = null;
-      let twitterUrl: string = `https://x.com/${tweet.author_id || 'unknown'}/status/${tweet.id}`;
-      
+      let twitterUrl: string = `https://x.com/${
+        tweet.author_id || 'unknown'
+      }/status/${tweet.id}`;
+
       // Find the first non-Twitter URL (actual event link)
       for (const url of urls) {
-        if (!url.expanded_url.includes('twitter.com') && !url.expanded_url.includes('x.com')) {
+        if (
+          !url.expanded_url.includes('twitter.com') &&
+          !url.expanded_url.includes('x.com')
+        ) {
           actualEventLink = url.expanded_url;
           break;
         }
       }
-      
+
       // Extract image URLs if available
       const imageUrls: string[] = [];
       if (tweet.attachments?.media_keys) {
         // If media keys are available, they would need to be resolved through Twitter API
         // For now, we'll extract image URLs from the tweet text itself
-        const imageUrlMatches = text.match(/https?:\/\/[^\s]+\.(jpg|jpeg|png|gif)/gi);
+        const imageUrlMatches = text.match(
+          /https?:\/\/[^\s]+\.(jpg|jpeg|png|gif)/gi,
+        );
         if (imageUrlMatches) {
           imageUrls.push(...imageUrlMatches);
         }
       }
-      
+
       const isFree = checkIfFree(text);
 
       const eventData: CreateEventDto = {
@@ -117,5 +142,66 @@ export class TweetProcessorService {
 
   formatEventForTweet(event: any): string {
     return formatEventTweet(event);
+  }
+
+  private async determineCategoryWithGemini(text: string): Promise<string> {
+    if (!this.model) {
+      return determineCategory(text);
+    }
+
+    try {
+      const prompt = `
+        Analyze the following tweet text and categorize it into one of these categories: 
+        AI, Fintech, Startup, Coding, Hardware, Design, Marketing, Cybersecurity, Virtual, HealthTech, EdTech, AgriTech. 
+        
+        Return ONLY the category name. If it doesn't fit well into any specific category, return what you think it is.
+        
+        Tweet: "${text}"
+      `;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const category = response.text().trim();
+
+      // Basic validation to ensure it returns a valid string
+      const validCategories = [
+        'AI',
+        'Fintech',
+        'Startup',
+        'Coding',
+        'Hardware',
+        'Design',
+        'Marketing',
+        'Cybersecurity',
+        'Virtual',
+        'HealthTech',
+        'EdTech',
+        'AgriTech',
+      ];
+
+      // Remove any potential extra characters or whitespace
+      const cleanedCategory = category.replace(/[^a-zA-Z]/g, '');
+
+      if (
+        validCategories.some(
+          (c) => c.toLowerCase() === cleanedCategory.toLowerCase(),
+        )
+      ) {
+        // Return the matching category with correct casing
+        return (
+          validCategories.find(
+            (c) => c.toLowerCase() === cleanedCategory.toLowerCase(),
+          ) || 'Startup'
+        );
+      }
+
+      return 'Startup';
+    } catch (error) {
+      this.logger.error(
+        'Gemini categorization failed, falling back to keyword matching',
+        error,
+      );
+      return determineCategory(text);
+    }
   }
 }

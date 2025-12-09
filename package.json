@@ -16,6 +16,7 @@
     "start:prod": "node --max-old-space-size=512 dist/main.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/common": "^11.0.1",
@@ -41,8 +42,7 @@
     "passport-twitter": "^1.0.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "twitter-api-v2": "^1.27.0",
-    "@twitter-api-v2/plugin-rate-limit": "^1.1.0"
+    "twitter-api-v2": "^1.27.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
