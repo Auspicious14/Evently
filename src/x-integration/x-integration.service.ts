@@ -31,7 +31,7 @@ export class XIntegrationService {
       for (const query of searchQueries) {
         try {
           const sinceId = this.twitterSearch.getSinceId(query);
-          const tweets = await this.twitterSearch.searchWithRetry(
+          const { tweets, includes } = await this.twitterSearch.searchWithRetry(
             query,
             maxResultsPerQuery,
             sinceId,
@@ -43,6 +43,7 @@ export class XIntegrationService {
             try {
               const eventData = await this.tweetProcessor.parseTweetToEvent(
                 tweet,
+                includes,
               );
               if (eventData) {
                 eventsToCreate.push(eventData);

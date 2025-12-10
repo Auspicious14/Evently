@@ -24,7 +24,7 @@ export class TwitterSearchService {
     maxResults: number,
     sinceId?: string,
     retries = 1,
-  ): Promise<any[]> {
+  ): Promise<{ tweets: any[]; includes: any }> {
     try {
       // Check rate limit BEFORE making the API call
       const rateLimit = await this.rateLimitPlugin.v2.getRateLimit(
@@ -48,11 +48,13 @@ export class TwitterSearchService {
           'entities',
           'author_id',
           'public_metrics',
+          'attachments',
         ],
-        expansions: ['author_id'],
+        expansions: ['author_id', 'attachments.media_keys'],
+        'media.fields': ['url', 'preview_image_url', 'type'],
       });
 
-      return response.data?.data || [];
+      return { tweets: response.data?.data || [], includes: response.includes };
     } catch (error: any) {
       if ((error.code === 429 || error.rateLimit) && retries > 0) {
         // Use plugin to get accurate wait time
